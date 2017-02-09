@@ -48,6 +48,7 @@ fprintf('Optimise hyperparameters.\n')
 hyp = minimize(hyp,@gp,-N,inf,par{:},y);              % optimise hyperparameters
 opt.stat = true;                   % show some more information during inference
 opt.ndcovs = 25;                    % ask for sampling-based (exact) derivatives
+opt.ldB2_lan = true;
 
 if strcmp(pred,'v'), opt.pred_var = 20; end
 tic, [post,nlZ,dnlZ] = infGrid(hyp,par{:},y,opt); ti = toc; tic  % run inference

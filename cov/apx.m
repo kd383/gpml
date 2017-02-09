@@ -122,12 +122,25 @@ elseif grid                                            % C)  Grid approximations
   if isfield(opt,'deg'), deg = opt.deg; else deg = 3; end     % interpol. degree
   if isfield(opt,'stat'), stat = opt.stat; else stat = false; end    % show stat
   cgpar = {cgtol,cgmit}; xg = cov{3}; p = numel(xg);  % conjugate gradient, grid
+  % load options for chebyshev
   if isfield(opt,'ldB2_cheby'),cheby=opt.ldB2_cheby; else cheby=false; end
   if isfield(opt,'ldB2_cheby_hutch'),m=opt.ldB2_cheby_hutch; else m=10; end
   if isfield(opt,'ldB2_cheby_degree'),d=opt.ldB2_cheby_degree; else d=15; end
   if isfield(opt,'ldB2_cheby_maxit'),mit=opt.ldB2_cheby_maxit; else mit=50; end
   if isfield(opt,'ldB2_cheby_seed'),sd=opt.ldB2_cheby_seed; else sd=[]; end
-  ldpar = {cheby,m,d,mit,sd};                                % logdet parameters
+  % load options for lanczos
+  if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
+  if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
+  if length(nZ)==1, Z = sign(randn(n,nZ));  end
+  if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=150; end
+  if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
+  % load options for surrogate
+  if isfield(opt,'lbB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
+  if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
+  elseif lan, method = 'lan'; ldpar = {method,n,Z,kmax,reorth};
+  elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd};
+  else ldpar = {[]}; 
+  end
   [Kg,Mx] = feval(cov{:},hyp.cov,x,[],deg);  % grid cov structure, interp matrix
   if stat    % show some information about the nature of the p Kronecker factors
     fprintf(apxGrid('info',Kg,Mx,xg,deg));
@@ -230,14 +243,35 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
     mvmKiW = @(x) K.mvm(x)+bsxfun(@times,1./W,x);
     solveKiW = @(r) linsolve(r,mvmKiW,cgpar{:});
   end                                                   % K*v = Mx*Kg.mvm(Mx'*v)
-  dhyp.cov = [];                                                          % init
-  if ldpar{1}                 % stochastic estimation of logdet cheby/hutchinson
+  dhyp.cov = zeros(2,1);                                                          % init
+  method = ldpar{1};
+  if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
     dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
     if nargout<3            % save some computation depending on required output
       ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:end});
     else
       [ldB2,emax,dhyp.cov,dW] = logdet_sample(W,K.mvm,dK, ldpar{2:end});
     end
+  elseif strcmp(method,'sur') % surrogate approximation of logdet
+      if nargout<3
+          ldB2 = ldpar{2}.predict(ldpar{3});
+      else
+          [ldB2, dldB2] = ldpar{2}.predict(cell2mat(struct2cell(ldpar{3})));
+          dhyp.cov = dldB2(1:end-1); dW = dldB2(end);
+      end
+  elseif strcmp(method,'lan') % stochastic estimation of logdet lanczos/hutchinson
+      ldB2 = logdet_lanczos(mvmB,ldpar{2:5})/2;
+      if nargout > 2  % estimation of derivative, rather than derivative of estimation
+          Z = ldpar{3};
+          nZ = size(Z,2);
+          dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
+          KinvZ = solveKiW(Z);
+          for j = 1:nZ
+              dhyp.cov = dhyp.cov + dK(KinvZ(:,j)./sW,sW.*Z(:,j));
+          end
+          dhyp.cov = dhyp.cov/(2*nZ);
+          dW = sum(Z.*(solveKiW(K.mvm(Z))./W),2)./sum(Z.^2,2)/2;
+      end
   else
     s = 3;                                    % Whittle embedding overlap factor
     [V,ee,e] = apxGrid('eigkron',Kg,xg,s);         % perform eigen-decomposition

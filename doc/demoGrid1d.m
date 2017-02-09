@@ -34,9 +34,10 @@ inf = @(varargin) infGrid(varargin{:},opt);
 
 fprintf('Sampling estimators for nlZ and dnlZ\n')
 opt.ndcovs = 25;       % ask for (additional) sampling-based (exact) derivatives
-opt.ldB2_cheby = true;
-opt.ldB2_cheby_hutch = 30;
+opt.ldB2_lan = true;
+opt.ldB2_lan_hutch = 10;
 [posts,nlZs,dnlZs] = infGrid(hyp,mean,covg,lik,x,y,opt);
+[fmugl,fs2gl,ymugl,ys2gl] = posts.predict(xs);
 [dnlZ.cov,dnlZg.cov,dnlZs.covs,dnlZs.cov]
 [nlZ,nlZg,nlZs]
 
@@ -45,7 +46,8 @@ plot(xs,ymu,'k','LineWidth',2), hold on
 plot(xs,ymuf,'g-.','LineWidth',2)
 plot(xs,ymug,'m:','LineWidth',2)
 plot(xs,ymugf,'c--','LineWidth',2)
-legend('exact','FITC','grid','fast-grid'), title('Predictive mean')
+plot(xs,ymugl,'y.','LineWidth',2)
+legend('exact','FITC','grid','fast-grid','cheb'), title('Predictive mean')
 plot(x,y,'r+'), plot(xs,ys,'r')
 plot(xs,ymu+2*sqrt(ys2),'k'), plot(xs,ymu-2*sqrt(ys2),'k')
 xlim([-8,10]), ylim([-3,6])
@@ -55,5 +57,6 @@ plot(xs,sqrt(ys2),'k','LineWidth',2), hold on
 plot(xs,sqrt(ys2f),'g-.','LineWidth',2)
 plot(xs,sqrt(ys2g),'m:','LineWidth',2)
 plot(xs,sqrt(ys2gf),'c--','LineWidth',2)
-legend('exact','FITC','grid','fast-grid'), title('Predictive standard dev')
+plot(xs,sqrt(ys2gl),'y.','LineWidth',2)
+legend('exact','FITC','grid','fast-grid','cheb'), title('Predictive standard dev')
 xlim([-8,10]), if write_fig, print -depsc f10.eps; end

@@ -20,5 +20,7 @@ addpath([mydir,'lik'])
 addpath([mydir,'mean'])
 addpath([mydir,'prior'])
 addpath([mydir,'util'])
+addpath([mydir,'util/surrogate'])
+addpath([mydir,'util/estimator'])
 
 clear me mydir
