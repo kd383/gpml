@@ -13,14 +13,14 @@ mean = {@meanConst}; lik = {@likGauss};     % constant mean, Gaussian likelihood
 sf = 1; ell = 0.5; hypcov = log([ell;sf]); hyp.cov = log([ell;sf/2; ell;sf/2]);
 hyp.mean = 0.1; sn = 0.1; hyp.lik = log(sn); % mean & likelihood hyperpapameters
 switch strc
-  case 'k',  xg = {  x1, x2 };                       % plain Kronecker structure
+  case 'k',  xg = {  x1, x2 };                       % plain Kronecker stsructure
   case 't',  xg = { {x1},x2 };     % Kronecker structure but one Toeplitz factor
   case 'p',  xg = {x2}; cov = {@covSEiso}; hyp.cov = log([ell;sf]); % projection
              hyp.proj = [0,1]; opt.proj = 'ortho';
   otherwise, xg = {{x1,x2}}; cov = {@covSEiso}; hyp.cov = log([ell;sf]);  % BTTB
 end
 covg = {@apxGrid,cov,xg};                                      % grid covariance
-opt.cg_maxit = 500; opt.cg_tol = 1e-5;                          % LCG parameters
+opt.cg_maxit = 500; opt.cg_tol = 1e-5;  opt.ldB2_cheb = true;   % LCG parameters
 inf = @(varargin) infGrid(varargin{:},opt);      % shortcut for inference method
 
 % set up the data
@@ -51,7 +51,7 @@ opt.ndcovs = 25;                    % ask for sampling-based (exact) derivatives
 opt.ldB2_lan = true;
 
 if strcmp(pred,'v'), opt.pred_var = 20; end
-tic, [post,nlZ,dnlZ] = infGrid(hyp,par{:},y,opt); ti = toc; tic  % run inference
+tic, [post,nlZ,dnlZ] = infGrid(hyp,par{:},y,opt); ti = toc; tic     % run inference 
 switch pred
   case 'f',                     [fmu,fs2,ymu,ys2] = post.predict(xs);
   case 'v',                     [fmu,fs2,ymu,ys2] = post.predict(xs);

@@ -17,10 +17,11 @@ function sur = build_surrogate(cov, x, opt)
     else
         bounds = opt.bounds; npts = opt.npts; ntrials = opt.ntrials;
         fields = opt.param{1}; idx = [0 cumsum(opt.param{2})];
+        method = opt.method;
     end
-    
+    n = size(x,1);
     N = size(bounds,2);
-    if isfield(opt,'nZ'), nZ = opt.nZ; else nZ = ceil(log(N)); end
+    if isfield(opt,'nZ'), nZ = opt.nZ; else nZ = ceil(log(n)); end
     if length(nZ)>1, Z = nZ; else Z = sign(randn(n,nZ)); end
     if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 150;  end
     kernel = CubicKernel(N);
@@ -37,10 +38,11 @@ function sur = build_surrogate(cov, x, opt)
         sn2 = exp(2*hyp.lik);
         K = apx(hyp, cov, x, []);
         if strcmp(method,'lanczos')
-            fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,[],kmax,0);
+            fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,kmax,0);
         else
             fX(i) = K.fun(ones(N,1)/sn2);
         end
+        i
     end
     sur = SurrogateLogDet(x, fX, exp_des, kernel, tail);
 end

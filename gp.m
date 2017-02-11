@@ -101,6 +101,7 @@ try                                                  % call the inference method
       end
     end
   end
+  
   if nargin>7   % compute marginal likelihood and its derivatives only if needed
     if isstruct(y)
       post = y;            % reuse a previously computed posterior approximation

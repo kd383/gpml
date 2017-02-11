@@ -8,9 +8,11 @@ n = 30; sn = 0.5;          % number of training points, noise standard deviation
 x = 2*rand(n,1)-1; x = 1+4*x+sign(x); y = f(x)+sn*randn(n,1);      % sample data
 
 cov = {@covSEiso}; sf = 2; ell = 1.0; hyp.cov = log([ell;sf]);
+opt.ldB2_lan = true;
+%opt=[];
 mean = {@meanSum,{@meanLinear,@meanConst}}; hyp.mean = [a;b];
 if isequal(liktyp,'g')
-  lik = {@likGauss};    hyp.lik = log(sn); inf = @infGaussLik;
+  lik = {@likGauss};    hyp.lik = log(sn); inf = @(varargin)infGaussLik(varargin{:},opt);
 else
   lik = {@likLogistic}; hyp.lik = [];      inf = @infLaplace;  y = sign(y);
 end
@@ -47,7 +49,7 @@ plot(xs,ymuf,'g-.','LineWidth',2)
 plot(xs,ymug,'m:','LineWidth',2)
 plot(xs,ymugf,'c--','LineWidth',2)
 plot(xs,ymugl,'y.','LineWidth',2)
-legend('exact','FITC','grid','fast-grid','cheb'), title('Predictive mean')
+legend('exact','FITC','grid','fast-grid','lan'), title('Predictive mean')
 plot(x,y,'r+'), plot(xs,ys,'r')
 plot(xs,ymu+2*sqrt(ys2),'k'), plot(xs,ymu-2*sqrt(ys2),'k')
 xlim([-8,10]), ylim([-3,6])
@@ -58,5 +60,5 @@ plot(xs,sqrt(ys2f),'g-.','LineWidth',2)
 plot(xs,sqrt(ys2g),'m:','LineWidth',2)
 plot(xs,sqrt(ys2gf),'c--','LineWidth',2)
 plot(xs,sqrt(ys2gl),'y.','LineWidth',2)
-legend('exact','FITC','grid','fast-grid','cheb'), title('Predictive standard dev')
+legend('exact','FITC','grid','fast-grid','lan'), title('Predictive standard dev')
 xlim([-8,10]), if write_fig, print -depsc f10.eps; end
