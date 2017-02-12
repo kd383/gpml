@@ -20,7 +20,7 @@ switch strc
   otherwise, xg = {{x1,x2}}; cov = {@covSEiso}; hyp.cov = log([ell;sf]);  % BTTB
 end
 covg = {@apxGrid,cov,xg};                                      % grid covariance
-opt.cg_maxit = 500; opt.cg_tol = 1e-5;  opt.ldB2_cheb = true;   % LCG parameters
+opt.cg_maxit = 500; opt.cg_tol = 1e-5;  %opt.ldB2_cheb = true;   % LCG parameters
 inf = @(varargin) infGrid(varargin{:},opt);      % shortcut for inference method
 
 % set up the data
@@ -48,7 +48,7 @@ fprintf('Optimise hyperparameters.\n')
 hyp = minimize(hyp,@gp,-N,inf,par{:},y);              % optimise hyperparameters
 opt.stat = true;                   % show some more information during inference
 opt.ndcovs = 25;                    % ask for sampling-based (exact) derivatives
-opt.ldB2_lan = true;
+%opt.ldB2_lan = true;
 
 if strcmp(pred,'v'), opt.pred_var = 20; end
 tic, [post,nlZ,dnlZ] = infGrid(hyp,par{:},y,opt); ti = toc; tic     % run inference 

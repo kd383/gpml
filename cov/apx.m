@@ -135,7 +135,7 @@ elseif grid                                            % C)  Grid approximations
   if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=150; end
   if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
   % load options for surrogate
-  if isfield(opt,'lbB2_sur'), sur=opt.ldB2_sur; fprintf('hello'), else sur=[]; end
+  if isfield(opt,'ldB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
   if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
   elseif lan, method = 'lan'; ldpar = {method,n,Z,kmax,reorth};
   elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd};
@@ -247,7 +247,7 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
   method = ldpar{1};
   if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
     dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
-    if nargout<3            % save some computation depending on required output
+    if nargout<2            % save some computation depending on required output
       ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:end});
     else
       [ldB2,emax,dhyp.cov,dW] = logdet_sample(W,K.mvm,dK, ldpar{2:end});
@@ -256,8 +256,9 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
       if nargout<3
           ldB2 = ldpar{2}.predict(ldpar{3});
       else
-          [ldB2, dldB2] = ldpar{2}.predict(cell2mat(struct2cell(ldpar{3})));
-          dhyp.cov = dldB2(1:end-1); dW = dldB2(end);
+          hyp = ldpar{3};
+          [ldB2, val] = ldpar{2}.predict(cell2mat(struct2cell(hyp)'));
+          dhyp.cov = val(1:end-1)'; dW = -val(end)*exp(2*hyp.lik)/2;
       end
   elseif strcmp(method,'lan') % stochastic estimation of logdet lanczos/hutchinson
       ldB2 = logdet_lanczos(mvmB,ldpar{2:5})/2;
