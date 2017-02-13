@@ -145,7 +145,15 @@ elseif grid                                            % C)  Grid approximations
   if stat    % show some information about the nature of the p Kronecker factors
     fprintf(apxGrid('info',Kg,Mx,xg,deg));
   end
-  K.mvm = @(x) Mx*Kg.mvm(Mx'*x);                    % mvm with covariance matrix
+  if isfield(opt,'replace_diag') && opt.replace_diag
+      dd = zeros(numel(x),1);
+      for j = 1:numel(x)
+          dd(j) = Mx(j,:)*Kg.mvm(Mx(j,:)');
+      end
+      K.mvm = @(x) Mx*Kg.mvm(Mx'*x)-bsxfun(@times,dd,x)+exp(2*hyp.cov(2))*x;  % mvm with covariance matrix
+  else
+      K.mvm = @(x) Mx*Kg.mvm(Mx'*x);
+  end
   K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
   K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar);
 end

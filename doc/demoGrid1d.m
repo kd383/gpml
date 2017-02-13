@@ -8,8 +8,18 @@ n = 30; sn = 0.5;          % number of training points, noise standard deviation
 x = 2*rand(n,1)-1; x = 1+4*x+sign(x); y = f(x)+sn*randn(n,1);      % sample data
 
 cov = {@covSEiso}; sf = 2; ell = 1.0; hyp.cov = log([ell;sf]);
-opt.ldB2_lan = true;
-%opt=[];
+opt = [];
+%{
+opt_sur.npts = 200; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','lik'},[2,1]};
+opt_sur.bounds = log([5e-1,1,1e-2;2,3,1]); opt_sur.method = 'lanczos';
+opt_sur.cg_maxit = 500; opt_sur.cg_tol = 1e-5;
+
+sur = build_surrogate(cov,x,opt_sur);
+
+opt1.cg_maxit = 500; opt1.cg_tol = 1e-5;
+opt1.ldB2_sur = sur;
+inf1 = @(varargin)infGaussLik(varargin{:},opt1);
+%}
 mean = {@meanSum,{@meanLinear,@meanConst}}; hyp.mean = [a;b];
 if isequal(liktyp,'g')
   lik = {@likGauss};    hyp.lik = log(sn); inf = @(varargin)infGaussLik(varargin{:},opt);

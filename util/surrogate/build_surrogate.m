@@ -36,13 +36,12 @@ function sur = build_surrogate(cov, x, opt)
             hyp.(fields{j}) = exp_des(i,idx(j)+1:idx(j+1));
         end
         sn2 = exp(2*hyp.lik);
-        K = apx(hyp, cov, x, []);
+        K = apx(hyp, cov, x, struct('replace_diag',0));
         if strcmp(method,'lanczos')
             fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,kmax,0);
         else
             fX(i) = K.fun(ones(N,1)/sn2);
         end
-        i
     end
     sur = SurrogateLogDet(x, fX, exp_des, kernel, tail);
 end
