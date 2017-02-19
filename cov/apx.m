@@ -131,7 +131,7 @@ elseif grid                                            % C)  Grid approximations
   % load options for lanczos
   if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
   if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
-  if length(nZ)==1, Z = sign(randn(n,nZ)); else Z = nZ; nZ = size(Z,2); end
+  if length(nZ)==1, Z = sign(randn(n,nZ)); nZ = size(Z,2); else Z = nZ;  end
   if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=100; end
   if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
   % load options for surrogate
@@ -287,7 +287,7 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
       if nargout <3
         ldB2 = logdet_lanczos(mvmB,ldpar{3:6});
       else          % estimation of derivative, rather than derivative of estimation
-          dB = @(x)[ldpar{7}(x),K.mvm(x)];
+          dB = @(x)[ldpar{7}(x)/exp(2*ldpar{2}.lik),K.mvm(x)];
           [ldB2,dldB2] = logdet_lanczos(mvmB,ldpar{3:6},dB);
           dhyp.cov = dldB2(1:2)';
           dW = dldB2(end);

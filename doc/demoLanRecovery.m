@@ -1,5 +1,5 @@
 clear, close all, write_fig = 0; 
-N = 1000; ngrid = 500;
+N = 2000; ngrid = 500;
 
 % Choose data points
 X = sort(4*rand(N,1)-2,'ascend');
@@ -7,7 +7,7 @@ X = sort(4*rand(N,1)-2,'ascend');
 
 % Generate data
 hyp = struct('mean', [], 'cov', log([0.2;0.8]), 'lik', log(0.1));
-opt_Y.hyp = hyp; opt_Y.type = 'RBF';
+opt_Y.hyp = hyp; opt_Y.type = 'OU';
 Y = generate_data(X,opt_Y);
 
 % Setup SKI and FITC
@@ -84,26 +84,28 @@ for nrun = 1:1
     end
     hyp_recover(2) ={hyp_lan};
     
+    %{
     tic;
     temp3 = minimize(hyp0,@gp,-100,inf3,means,covg,lik,X,Y);
     hyp_recover(3) = {exp([temp3.cov',temp3.lik])};
     time(4) = time(4) + toc;
     [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
-    NLK{3} = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    NLK(3) = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    %}
     
     tic;
     temp4 = minimize(hyp0,@gp,-100,inf4,means,covg,lik,X,Y);
     hyp_recover(4) = {exp([temp4.cov',temp4.lik])};
     time(5) = time(5) + toc;
     [~,nlZ,dnlZ] = infGaussLik(temp4,means,cov,lik,X,Y,opt6);
-    NLK{4} = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    NLK(4) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     
     tic;
     temp5 = minimize(hyp0,@gp,-100,inf5,means,covf,lik,X,Y);
     hyp_recover(5) = {exp([temp5.cov',temp5.lik])};
     time(6) = time(6) + toc;
     [~,nlZ,dnlZ] = infGaussLik(temp5,means,cov,lik,X,Y,opt6);
-    NLK{5} = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    NLK(5) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     
     
     tic;
@@ -111,7 +113,7 @@ for nrun = 1:1
     hyp_recover(6) = {exp([temp6.cov',temp6.lik])};
     time(7) = time(7) + toc;
     [~,nlZ,dnlZ] = infGaussLik(temp1,means,cov,lik,X,Y,opt6);
-    NLK{6} = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    NLK(6) = {[nlZ,dnlZ.cov',dnlZ.lik]};
 end
 
 
