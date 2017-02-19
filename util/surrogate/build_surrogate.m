@@ -22,8 +22,8 @@ function sur = build_surrogate(cov, x, opt)
     n = size(x,1);
     N = size(bounds,2);
     if isfield(opt,'nZ'), nZ = opt.nZ; else nZ = ceil(log(n)); end
-    if length(nZ)>1, Z = nZ; else Z = sign(randn(n,nZ)); end
-    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 150;  end
+    if length(nZ)>1, Z = nZ; nZ = size(Z,2); else Z = sign(randn(n,nZ)); end
+    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 100;  end
     kernel = CubicKernel(N);
     tail = LinearTail(N);
     exp_des = best_slhd(npts, N, ntrials);
@@ -35,10 +35,25 @@ function sur = build_surrogate(cov, x, opt)
         for j = 1:length(fields)
             hyp.(fields{j}) = exp_des(i,idx(j)+1:idx(j+1));
         end
+        %Z = sign(randn(n,nZ));
         sn2 = exp(2*hyp.lik);
-        K = apx(hyp, cov, x, struct('replace_diag',0));
+        K = apx(hyp, cov, x, opt);
         if strcmp(method,'lanczos')
+            %{
+            if isfield(opt,'replace_diag') && opt.replace_diag
+                dd = zeros(n,1);
+                for m=1:n
+                    em = sparse(n, 1); 
+                    em(m) = 1;
+                    dd(m) = exp(2*hyp.cov(2)) - em'*K.mvm(em);
+                end
+                MVM = @(X)K.mvm(X)+bsxfun(@times,dd,X);
+            else
+                MVM = K.mvm;
+            end
+            %}
             fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,kmax,0);
+            i
         else
             fX(i) = K.fun(ones(N,1)/sn2);
         end

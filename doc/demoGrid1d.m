@@ -8,7 +8,7 @@ n = 30; sn = 0.5;          % number of training points, noise standard deviation
 x = 2*rand(n,1)-1; x = 1+4*x+sign(x); y = f(x)+sn*randn(n,1);      % sample data
 
 cov = {@covSEiso}; sf = 2; ell = 1.0; hyp.cov = log([ell;sf]);
-opt = [];
+opt.ldB2_lan = 1;
 %{
 opt_sur.npts = 200; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','lik'},[2,1]};
 opt_sur.bounds = log([5e-1,1,1e-2;2,3,1]); opt_sur.method = 'lanczos';

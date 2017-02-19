@@ -1,5 +1,5 @@
 disp('See http://www.gaussianprocess.org/gpml/code/matlab/doc/ for details.')
-clear all, close all, write_fig = 0; N = 30;
+clearvars -except y, close all, write_fig = 0; N = 30;
 strc = input(['Which structure?\n  (k)ronecker, (t)oeplitz, (b)ttb, ',...
              '(p)rojection: '],'s');
 if isequal(strc,'p'), data = 'r';
@@ -19,9 +19,7 @@ switch strc
              hyp.proj = [0,1]; opt.proj = 'ortho';
   otherwise, xg = {{x1,x2}}; cov = {@covSEiso}; hyp.cov = log([ell;sf]);  % BTTB
 end
-covg = {@apxGrid,cov,xg};                                      % grid covariance
-opt.cg_maxit = 500; opt.cg_tol = 1e-5;  %opt.ldB2_cheb = true;   % LCG parameters
-inf = @(varargin) infGrid(varargin{:},opt);      % shortcut for inference method
+covg = {@apxGrid,cov,xg};      % grid covariance
 
 % set up the data
 f = @(x) sin(x(:,2)) + x(:,1);                        % 2d function to be learnt
@@ -36,6 +34,16 @@ switch data
 end
 fprintf('Use %s training data.\n',sdata)
 y = f(xx); y = y + 0.1*randn(size(y));  % add some observation noise to the data
+%{
+opt_sur.npts = 75; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','mean','lik'},[4,1,1]};
+opt_sur.bounds = log([0.3,0.3,0.3,0.3,5e-2,1e-2;1,1,1,1,5e-1,1]); opt_sur.method = 'lanczos';
+opt_sur.cg_maxit = 500; opt_sur.cg_tol = 1e-5;
+tic;
+sur = build_surrogate(covg,xx,opt_sur);
+time = toc
+%}
+opt.cg_maxit = 500; opt.cg_tol = 1e-5;  %opt.ldB2_sur = sur;   % LCG parameters
+inf = @(varargin) infGrid(varargin{:},opt);      % shortcut for inference method
 
 % construct a grid covering the training data from scratch
 if isequal(strc,'k'), xg = apxGrid('create',xx,true,[137,132]); end

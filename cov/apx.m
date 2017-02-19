@@ -85,9 +85,9 @@ function K = apx(hyp,cov,x,opt)
 if nargin<4, opt = []; end                           % make sure variable exists
 if isnumeric(cov), c1 = 'numeric'; else c1 = cov{1}; end         % detect matrix
 if isa(c1, 'function_handle'), c1 = func2str(c1); end         % turn into string
-sparse = strcmp(c1,'apxSparse') || strcmp(c1,'covFITC');
+Sparse = strcmp(c1,'apxSparse') || strcmp(c1,'covFITC');
 grid   = strcmp(c1,'apxGrid')   || strcmp(c1,'covGrid');
-exact = ~grid && ~sparse;
+exact = ~grid && ~Sparse;
 
 if exact                   % A) Exact computations using dense matrix operations
   if strcmp(c1,'numeric'), K = cov; dK = [];           % catch dense matrix case
@@ -97,7 +97,7 @@ if exact                   % A) Exact computations using dense matrix operations
   K = struct('mvm',@(x)mvmK_exact(K,x), 'P',@(x)x, 'Pt',@(x)x,... % mvm and proj 
              'fun',@(W)ldB2_exact(W,K,dK));
 
-elseif sparse                                         % B) Sparse approximations
+elseif Sparse                                         % B) Sparse approximations
   if isfield(opt,'s'), s = opt.s; else s = 1.0; end            % default is FITC
   if isfield(hyp,'xu'), cov{3} = hyp.xu; end   % hyp.xu provided, replace cov{3}
   xu = cov{3}; nu = size(xu,1);                        % extract inducing points
@@ -131,13 +131,13 @@ elseif grid                                            % C)  Grid approximations
   % load options for lanczos
   if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
   if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
-  if length(nZ)==1, Z = sign(randn(n,nZ));  end
-  if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=150; end
+  if length(nZ)==1, Z = sign(randn(n,nZ)); else Z = nZ; nZ = size(Z,2); end
+  if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=100; end
   if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
   % load options for surrogate
   if isfield(opt,'ldB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
   if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
-  elseif lan, method = 'lan'; ldpar = {method,n,Z,kmax,reorth};
+  elseif lan,   method = 'lan'; ldpar = {method,hyp,n,Z,kmax,reorth};
   elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd};
   else ldpar = {[]}; 
   end
@@ -145,17 +145,32 @@ elseif grid                                            % C)  Grid approximations
   if stat    % show some information about the nature of the p Kronecker factors
     fprintf(apxGrid('info',Kg,Mx,xg,deg));
   end
-  if isfield(opt,'replace_diag') && opt.replace_diag
-      dd = zeros(numel(x),1);
-      for j = 1:numel(x)
-          dd(j) = Mx(j,:)*Kg.mvm(Mx(j,:)');
-      end
-      K.mvm = @(x) Mx*Kg.mvm(Mx'*x)-bsxfun(@times,dd,x)+exp(2*hyp.cov(2))*x;  % mvm with covariance matrix
+  K.Mx = Mx;
+  K.Kg = Kg;
+  
+  if length(x) == length(cov{3}{:})
+      MVM = Kg.mvm;
   else
-      K.mvm = @(x) Mx*Kg.mvm(Mx'*x);
+      MVM = @(x) Mx*Kg.mvm(Mx'*x);
+  end
+  flag = 0;
+  if isfield(opt,'replace_diag') && opt.replace_diag
+      flag = 1;
+      dd = exp(2*hyp.cov(2)) - sum(Mx.*(Kg.mvm(Mx')'),2);
+      K.mvm = @(x) MVM(x)+ bsxfun(@times,dd,x);  % mvm with covariance matrix
+
+      if strcmp(func2str(cov{2}{:}),'covSEiso')
+          dB = deriv_cor(hyp,xg{:},Mx,1);
+      else
+          dB = deriv_cor(hyp,xg{:},Mx,0);
+      end
+      dsB = @(x)dB(x)*exp(2*hyp.lik);
+      ldpar(end+1) = {dsB};
+  else
+      K.mvm = MVM;
   end
   K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
-  K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar);
+  K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
 end
 
 %% A) Exact computations using dense matrix operations =========================
@@ -242,7 +257,7 @@ function dhyp = ldB2_deriv_sparse(V,Luu,d,LuV,dKuu,dKu,ddiagK,s,xud,alpha,a,b)
 
 
 %% C)  Grid approximations =====================================================
-function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
+function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
   if all(W>=0)                                 % well-conditioned symmetric case
     sW = sqrt(W); msW = @(x) bsxfun(@times,sW,x);
     mvmB = @(x) msW(K.mvm(msW(x)))+x;
@@ -265,26 +280,18 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
           ldB2 = ldpar{2}.predict(ldpar{3});
       else
           hyp = ldpar{3};
-          [ldB2, val] = ldpar{2}.predict(cell2mat(struct2cell(hyp)'));
+          [ldB2, val] = ldpar{2}.predict(cell2mat(struct2cell(hyp))');
           dhyp.cov = val(1:end-1)'; dW = -val(end)*exp(2*hyp.lik)/2;
       end
   elseif strcmp(method,'lan') % stochastic estimation of logdet lanczos/hutchinson
-      ldB2 = logdet_lanczos(mvmB,ldpar{2:5})/2;
-      if nargout > 2  % estimation of derivative, rather than derivative of estimation
-          Z = ldpar{3};
-          nZ = size(Z,2);
-          dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
-          KinvZ = solveKiW(Z);
-          for j = 1:nZ
-              if isempty(dhyp.cov)
-                  dhyp.cov = dK(KinvZ(:,j)./sW,sW.*Z(:,j));
-              else
-                dhyp.cov = dhyp.cov + dK(KinvZ(:,j)./sW,sW.*Z(:,j));
-              end
-          end
-          dhyp.cov = dhyp.cov/(2*nZ);
-          dW = sum(Z.*(solveKiW(K.mvm(Z))./W),2)./sum(Z.^2,2)/2;
-      end
+      if nargout <3
+        ldB2 = logdet_lanczos(mvmB,ldpar{3:6});
+      else          % estimation of derivative, rather than derivative of estimation
+          dB = @(x)[ldpar{7}(x),K.mvm(x)];
+          [ldB2,dldB2] = logdet_lanczos(mvmB,ldpar{3:6},dB);
+          dhyp.cov = dldB2(1:2)';
+          dW = dldB2(end);
+      end       
   else
     s = 3;                                    % Whittle embedding overlap factor
     [V,ee,e] = apxGrid('eigkron',Kg,xg,s);         % perform eigen-decomposition
@@ -292,7 +299,11 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar)
     de = de.*double(e>0); % chain rule of max(e,0) in eigkron, Q = V*diag(de)*V'
     if nargout>3, dhyp.cov = ldB2_deriv_grid_fiedler(Kg,xg,V,ee,de,s); end
   end
-  dldB2 = @(varargin) ldB2_deriv_grid(dhyp, Kg,xg,Mx, varargin{:});
+  if flag
+      dldB2 = @(alpha) ldB2_deriv_grid(dhyp, Kg,xg,Mx, alpha,ldpar{end});
+  else
+      dldB2 = @(varargin) ldB2_deriv_grid(dhyp, Kg,xg,Mx, varargin{:});
+  end
   if ~isreal(ldB2), error('Too many negative W detected.'), end
   L = @(r) -K.P(solveKiW(K.Pt(r)));
 
@@ -322,8 +333,11 @@ function dhyp = ldB2_deriv_grid_fiedler(Kg,xg,V,ee,de,s)
   end
 
 function dhyp = ldB2_deriv_grid(dhyp, Kg,xg,Mx, alpha,a,b)
-  if nargin>4, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,alpha,alpha)/2; end
-  if nargin>6, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,a,b);           end
+  if nargin == 6, dhyp.cov = dhyp.cov - (alpha'*a(alpha)/2)';
+  else
+    if nargin>4, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,alpha,alpha)/2; end
+    if nargin>6, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,a,b);           end
+  end
 
 function q = linsolve(p,mvm,varargin) % solve q = mvm(p) via conjugate gradients
   [q,flag,relres,iter] = conjgrad(mvm,p,varargin{:});                 % like pcg
