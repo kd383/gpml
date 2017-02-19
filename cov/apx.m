@@ -131,7 +131,7 @@ elseif grid                                            % C)  Grid approximations
   % load options for lanczos
   if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
   if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
-  if length(nZ)==1, Z = sign(randn(n,nZ)); nZ = size(Z,2); else Z = nZ;  end
+  if length(nZ)==1, Z = sign(randn(n,nZ)); else Z = nZ;  end
   if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=100; end
   if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
   % load options for surrogate

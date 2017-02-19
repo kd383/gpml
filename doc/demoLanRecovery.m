@@ -1,14 +1,9 @@
-clear, close all, write_fig = 0; 
-N = 2000; ngrid = 500;
+clearvars, close all, write_fig = 0; 
+N = 5000; ngrid = 500;
 
 % Choose data points
 X = sort(4*rand(N,1)-2,'ascend');
 %X = linspace(0,4,N)';
-
-% Generate data
-hyp = struct('mean', [], 'cov', log([0.2;0.8]), 'lik', log(0.1));
-opt_Y.hyp = hyp; opt_Y.type = 'OU';
-Y = generate_data(X,opt_Y);
 
 % Setup SKI and FITC
 xg = apxGrid('create',X,true,ngrid);
@@ -19,6 +14,11 @@ covg = {@apxGrid,cov,xg};
 covf = {@apxSparse,cov,xu};
 lik = {@likGauss};
 means = {@meanZero};
+
+% Generate data
+hyp = struct('mean', [], 'cov', log([0.3;1.2]), 'lik', log(0.1));
+opt_Y.hyp = hyp; opt_Y.type = 'OU'; opt_Y.cov = covg;
+Y = generate_data(X,opt_Y);
 
 time = zeros(1,7);
 
@@ -48,12 +48,12 @@ opt6.cg_maxit = 500; opt6.cg_tol = 1e-3;
 inf6 = @(varargin)infGaussLik(varargin{:},opt6);
 
 for nrun = 1:1
-    hyp0 = struct('mean', [], 'cov', 0.9*hyp.cov,'lik', 0.9*hyp.lik);
+    hyp0 = struct('mean', [], 'cov', 1.1*hyp.cov,'lik', 1.1*hyp.lik);
     
     hyp_recover = cell(6,1);
     NLK = cell(6,1);
     
-    for j = 1:5
+    for j = 1:1
         tic;
         sur = build_surrogate(covg,X,opt_sur);
         time(1) = time(1) + toc;
@@ -71,7 +71,7 @@ for nrun = 1:1
     end
     hyp_recover(1) ={hyp_sur};
     
-    for j = 1:5
+    for j = 1:1
         % Lan + Diag_Corr
         opt2.ldB2_lan_hutch = sign(randn(N,30));
         inf2 = @(varargin)infGaussLik(varargin{:},opt2);
@@ -107,13 +107,14 @@ for nrun = 1:1
     [~,nlZ,dnlZ] = infGaussLik(temp5,means,cov,lik,X,Y,opt6);
     NLK(5) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     
-    
+    %{
     tic;
     temp6 = minimize(hyp0,@gp,-100,inf6,means,cov,lik,X,Y);
     hyp_recover(6) = {exp([temp6.cov',temp6.lik])};
     time(7) = time(7) + toc;
-    [~,nlZ,dnlZ] = infGaussLik(temp1,means,cov,lik,X,Y,opt6);
+    [~,nlZ,dnlZ] = infGaussLik(temp6,means,cov,lik,X,Y,opt6);
     NLK(6) = {[nlZ,dnlZ.cov',dnlZ.lik]};
+    %}
 end
 
 

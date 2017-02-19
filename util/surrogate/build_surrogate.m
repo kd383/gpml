@@ -23,7 +23,7 @@ function sur = build_surrogate(cov, x, opt)
     N = size(bounds,2);
     if isfield(opt,'nZ'), nZ = opt.nZ; else nZ = ceil(log(n)); end
     if length(nZ)>1, Z = nZ; nZ = size(Z,2); else Z = sign(randn(n,nZ)); end
-    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 75;  end
+    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 100;  end
     kernel = CubicKernel(N);
     tail = LinearTail(N);
     exp_des = best_slhd(npts, N, ntrials);

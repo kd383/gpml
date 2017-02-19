@@ -1,12 +1,9 @@
 function f = generate_data(X,opt)
     n = length(X);
-    if strcmp(opt.type,'RBF')
-        K = covSEiso(opt.hyp.cov,X);
-        K = 0.5*(K + K') + exp(2*opt.hyp.lik)*eye(length(X));
-        f = chol(K)'* randn(n,1);
-    elseif strcmp(opt.type,'OU')
-        K = covMaterniso(1,opt.hyp.cov,X);
-        K = 0.5*(K + K') + exp(2*opt.hyp.lik)*eye(length(X));
+    if strcmp(opt.type,'RBF') || strcmp(opt.type,'OU')
+        K = apx(opt.hyp,opt.cov,X);
+        K = K.mvm(eye(n));
+        K = 0.5*(K + K') + exp(2*opt.hyp.lik)*eye(n);
         f = chol(K)'* randn(n,1);
     elseif strcmp(opt.type,'step')
         disc = X(randi(n,4,1));
