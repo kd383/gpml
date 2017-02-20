@@ -168,6 +168,10 @@ elseif grid                                            % C)  Grid approximations
       ldpar(end+1) = {dsB};
   else
       K.mvm = MVM;
+      if lan
+          dKxg = derivative_RBF(hyp,xg{:},1);
+          ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
+      end
   end
   K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
   K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
@@ -271,9 +275,9 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
   if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
     dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
     if nargout<2            % save some computation depending on required output
-      ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:end});
+      ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:5});
     else
-      [ldB2,emax,dhyp.cov,dW] = logdet_sample(W,K.mvm,dK, ldpar{2:end});
+      [ldB2,emax,dhyp.cov,dW] = logdet_sample(W,K.mvm,dK, ldpar{2:5});
     end
   elseif strcmp(method,'sur') % surrogate approximation of logdet
       if nargout<3

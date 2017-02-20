@@ -11,8 +11,10 @@ function f = generate_data(X,opt)
         f2 = @(x)heaviside(x-disc(2));
         f3 = @(x)heaviside(x-disc(3));
         f4 = @(x)heaviside(x-disc(4));
-        f = @(x) randn*f1(x)+randn*f2(x)+randn*f3(x)+randn*f4(x)+0.1*randn(length(x),1);
+        f = @(x) randn*f1(x)+randn*f2(x)+randn*f3(x)+randn*f4(x);
     elseif strcmp(opt.type,'expsin')
-        f = @(x)sin(5*x).*exp(-x.^2/2) + 0.1*randn(length(x),1);
+        f = @(x)sin(5*x).*exp(-x.^2/2);
+    elseif strcmp(opt.type,'exp')
+        f = @(x)exp(-abs(x)/2);
     end
 end
