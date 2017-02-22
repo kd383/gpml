@@ -162,14 +162,14 @@ elseif grid                                            % C)  Grid approximations
       if strcmp(func2str(cov{2}{:}),'covSEiso')
           dB = deriv_cor(hyp,xg{:},Mx,1);
       else
-          dB = deriv_cor(hyp,xg{:},Mx,0);
+          dB = deriv_cor(hyp,xg{:},Mx,2);
       end
       dsB = @(x)dB(x)*exp(2*hyp.lik);
       ldpar(end+1) = {dsB};
   else
       K.mvm = MVM;
       if lan
-          dKxg = derivative_RBF(hyp,xg{:},1);
+          dKxg = derivative_Matern(3,hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
   end
