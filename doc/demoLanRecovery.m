@@ -121,7 +121,7 @@ for nrun = 1:1
         inf3 = @(varargin)infGaussLik(varargin{:},opt3);
         tic;
         temp3 = minimize(hyp0,@gp,-30,inf3,means,covg_cheb,lik,X,Y);
-        hyp_cheb(j,:) = exp([temp3.cov',temp2.lik]);
+        hyp_cheb(j,:) = exp([temp3.cov',temp3.lik]);
         time(3) = time(3) + toc;
         [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
         NLK{3}(j, :) = {[nlZ,dnlZ.cov',dnlZ.lik]};
@@ -166,7 +166,13 @@ if numel(hyp_recover{2}) == 3
     fprintf('Lanczos: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{2}, time(2))
 else
     nnruns = size(hyp_recover{2},1);
-    fprintf('Lanczos: (%.3e, %.3e, %.3e)  in %.3f (s)\n',mean(hyp_recover{2}),time(2)/nnruns)
+    fprintf('Lanczos: (%.3e, %.3e, %.3e)  in %.3f (s)\n',exp(mean(log(hyp_recover{2}))),time(2)/nnruns)
+end
+if numel(hyp_recover{3}) == 3
+    fprintf('Chebyshev: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{3}, time(3))
+else
+    nnruns = size(hyp_recover{3},1);
+    fprintf('Chebyshev: (%.3e, %.3e, %.3e)  in %.3f (s)\n',exp(mean(log(hyp_recover{3}))),time(3)/nnruns)
 end
 fprintf('Scaled eig: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{4}, time(4))
 fprintf('FITC: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{5}, time(5))
