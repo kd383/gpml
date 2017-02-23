@@ -150,6 +150,7 @@ elseif grid                                            % C)  Grid approximations
   
   if length(x) == length(cov{3}{:})
       MVM = Kg.mvm;
+      die
   else
       MVM = @(x) Mx*Kg.mvm(Mx'*x);
   end
