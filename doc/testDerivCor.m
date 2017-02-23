@@ -2,14 +2,14 @@ clear
 N = 1000;
 X = sort(4*rand(N,1)-2,'ascend');
 xg = apxGrid('create',X,true,500);
-cov = {@covSEiso};
-%cov = {@(varargin)covMaterniso(1,varargin{:})};
+%cov = {@covSEiso};
+cov = {@(varargin)covMaterniso(3,varargin{:})};
 covg = {@apxGrid,cov,xg};
-hyp = struct('mean', [], 'cov', log([0.3,1.2]), 'lik', log(0.1));
+hyp = struct('mean', [], 'cov', log([0.1,1.5]), 'lik', log(0.1));
 opt.cg_maxit = 700;opt.cg_tol = 1e-5;opt.replace_diag = 1;
 K = apx(hyp,covg,X,opt);
 B = eye(N)+K.mvm(eye(N))/exp(2*hyp.lik);
-dB = deriv_cor(hyp,xg{:},K.Mx,1);
+dB = deriv_cor(hyp,xg{:},K.Mx,2);
 dB = dB(eye(N));
 
 hyp1 = hyp;

@@ -23,7 +23,8 @@ function sur = build_surrogate(cov, x, opt)
     N = size(bounds,2);
     if isfield(opt,'nZ'), nZ = opt.nZ; else nZ = ceil(log(n)); end
     if length(nZ)>1, Z = nZ; nZ = size(Z,2); else Z = sign(randn(n,nZ)); end
-    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 100;  end
+    if isfield(opt,'kmax'), kmax = opt.kmax; else kmax = 80;  end
+    if isfield(opt,'reorth'), reorth = opt.reorth; else reorth = 0;  end
     kernel = CubicKernel(N);
     tail = LinearTail(N);
     exp_des = best_slhd(npts, N, ntrials);
@@ -52,7 +53,7 @@ function sur = build_surrogate(cov, x, opt)
                 MVM = K.mvm;
             end
             %}
-            fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,kmax,0);
+            fX(i) = logdet_lanczos(@(X)K.mvm(X)/sn2+X,size(x,1),Z,kmax,opt.reorth);
             i
         else
             fX(i) = K.fun(ones(N,1)/sn2);

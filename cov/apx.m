@@ -169,7 +169,7 @@ elseif grid                                            % C)  Grid approximations
   else
       K.mvm = MVM;
       if lan
-          dKxg = derivative_Matern(3,hyp,xg{:},1);
+          dKxg = derivative_RBF(hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
   end
