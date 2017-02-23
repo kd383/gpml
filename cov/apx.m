@@ -170,6 +170,7 @@ elseif grid                                            % C)  Grid approximations
   else
       K.mvm = MVM;
       if lan
+          die
           dKxg = derivative_RBF(hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
@@ -178,7 +179,7 @@ elseif grid                                            % C)  Grid approximations
   K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
 end
 
-%% A) Exact computations using dense matrix operations =========================
+% A) Exact computations using dense matrix operations =========================
 function [ldB2,solveKiW,dW,dldB2,L] = ldB2_exact(W,K,dK)
   isWneg = any(W<0); n = numel(W);
   if isWneg                  % switch between Cholesky and LU decomposition mode
@@ -220,7 +221,7 @@ function z = mvmK_exact(K,x)
     z = K*x;
   end
 
-%% B) Sparse approximations ====================================================
+% B) Sparse approximations ====================================================
 function [ldB2,solveKiW,dW,dldB2,L]=ldB2_sparse(W,V,g,Luu,dKuu,dKu,ddiagK,s,xud)
   z = s*g.*W; t = 1/s*log(z+1); i = z<1e-4;  % s=0: t = g*W, s=1: t = log(g*W+1)
   t(i) = g(i).*W(i).*(1-z(i)/2+z(i).^2/3);         % 2nd order Taylor for tiny z
@@ -261,7 +262,7 @@ function dhyp = ldB2_deriv_sparse(V,Luu,d,LuV,dKuu,dKu,ddiagK,s,xud,alpha,a,b)
   end
 
 
-%% C)  Grid approximations =====================================================
+% C)  Grid approximations =====================================================
 function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
   if all(W>=0)                                 % well-conditioned symmetric case
     sW = sqrt(W); msW = @(x) bsxfun(@times,sW,x);

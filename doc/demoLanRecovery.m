@@ -2,7 +2,7 @@ clearvars, close all, write_fig = 0;
 N = 5000;
 ngrid_lan = 2000;
 ngrid_sceig = 2000; 
-ngrid_fitc = 500; 
+ngrid_fitc = 750; 
 rng(1)
 
 % Choose data points
@@ -14,8 +14,8 @@ xg_lan = covGrid('create',X,true,ngrid_lan);
 xg_sceig = covGrid('create',X,true,ngrid_sceig);
 xu = linspace(min(X),max(X),ngrid_fitc)';
 
-cov = {@(varargin)covMaterniso(3,varargin{:})};
-%cov = {@covSEiso};
+%cov = {@(varargin)covMaterniso(3,varargin{:})};
+cov = {@covSEiso};
 covg_lan = {@apxGrid,cov,xg_lan};
 covg_sceig = {@apxGrid,cov,xg_sceig};
 covf = {@apxSparse,cov,xu};
@@ -24,13 +24,13 @@ means = {@meanZero};
 
 % Generate data
 hyp = struct('mean', [], 'cov', log([0.01;0.5]), 'lik', log(0.05));
-opt_Y.hyp = hyp; opt_Y.type = 'Matern'; opt_Y.cov = cov;
+opt_Y.hyp = hyp; opt_Y.type = 'RBF'; opt_Y.cov = cov;
 %Y = f(X) + .1*randn(N,1);
 
 time = zeros(1,7);
 
 % Build surrogate
-opt_sur.npts = 200; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','lik'},[2,1]};
+opt_sur.npts = 300; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','lik'},[2,1]};
 opt_sur.bounds = log([5e-3,0.1,1e-2;0.1,1,0.1]); opt_sur.method = 'lanczos';
 opt_sur.cg_maxit = 1000; opt_sur.cg_tol = 1e-5; opt_sur.replace_diag = 1; opt_sur.nZ = 10;
 opt_sur.kmax = 100; opt_sur.reorth = 1;
@@ -75,7 +75,6 @@ for nrun = 1:1
     K = apx(hyp,cov,X,opt6);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
     fprintf('Exact: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
     
-    %{
     for j = 1:1
         sur = build_surrogate(covg,X,opt_sur);
         % Sur + Lan + Diag_Corr
@@ -91,9 +90,8 @@ for nrun = 1:1
         NLK{1}(j,:) = [nlZ,dnlZ.cov',dnlZ.lik];
     end
     hyp_recover(1) ={hyp_sur};
-    %}
     
-    for j = 1:1
+    for j = 1:5
         % Lan + Diag_Corr
         opt2.ldB2_lan_hutch = sign(randn(N,10));
         inf2 = @(varargin)infGaussLik(varargin{:},opt2);
@@ -106,7 +104,6 @@ for nrun = 1:1
         fprintf('Lanczos: (%.3e, %.3e, %.3e)\n\n', exp([temp2.cov',temp2.lik]))
     end
     hyp_recover(2) ={hyp_lan};
-    
     
     %{
     tic;
@@ -125,7 +122,6 @@ for nrun = 1:1
     NLK(4) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     fprintf('Scaled eig: (%.3e, %.3e, %.3e)\n\n', exp([temp4.cov',temp4.lik]))
     
-    
     tic;
     temp5 = minimize(hyp0,@gp,-30,inf5,means,covf,lik,X,Y);
     hyp_recover(5) = {exp([temp5.cov',temp5.lik])};
@@ -133,7 +129,6 @@ for nrun = 1:1
     [~,nlZ,dnlZ] = infGaussLik(temp5,means,cov,lik,X,Y,opt6);
     NLK(5) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     fprintf('FITC: (%.3e, %.3e, %.3e)\n\n', exp([temp5.cov',temp5.lik]))
-    
     
     tic;
     temp6 = minimize(hyp0,@gp,-30,inf6,means,cov,lik,X,Y);

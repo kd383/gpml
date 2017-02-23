@@ -17,3 +17,5 @@ code/table.tex
 *.gz
 
 *.gz
+
+doc/matern32
