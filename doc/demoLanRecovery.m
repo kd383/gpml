@@ -1,6 +1,7 @@
 clearvars, close all, write_fig = 0;
 N = 5000;
 ngrid_lan = 2000;
+ngrid_cheb = 2000;
 ngrid_sceig = 2000; 
 ngrid_fitc = 750; 
 rng(1)
@@ -11,12 +12,14 @@ X = randn(N, 1);
 
 % Setup SKI and FITC
 xg_lan = covGrid('create',X,true,ngrid_lan);
+xg_cheb = covGrid('create',X,true,ngrid_lan);
 xg_sceig = covGrid('create',X,true,ngrid_sceig);
 xu = linspace(min(X),max(X),ngrid_fitc)';
 
 cov = {@(varargin)covMaterniso(3,varargin{:})};
 %cov = {@covSEiso};
 covg_lan = {@apxGrid,cov,xg_lan};
+covg_cheb = {@apxGrid,cov,xg_cheb};
 covg_sceig = {@apxGrid,cov,xg_sceig};
 covf = {@apxSparse,cov,xu};
 lik = {@likGauss};
@@ -40,8 +43,9 @@ opt2.cg_maxit = 1000; opt2.cg_tol = 1e-3; opt2.replace_diag = 1;
 opt2.ldB2_lan = 1; opt2.ldB2_lan_reorth = 1; opt2.ldB2_lan_kmax = 100;
 
 % Chebyshev
-opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 0; opt3.ldB2_cheby = 1;
+opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 1; opt3.ldB2_cheby = 1;
 inf3 = @(varargin)infGaussLik(varargin{:},opt3);
+opt3.ldB2_cheby_degree = 250;
 
 % Apx + No_Diag_Corr
 opt4.cg_maxit = 2000; opt4.cg_tol = 1e-3; opt4.replace_diag = 0;
@@ -66,6 +70,9 @@ for nrun = 1:1
     K = apx(hyp,covg_lan,X,opt2);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
     fprintf('Lanczos: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
     
+    K = apx(hyp,covg_sceig,X,opt3);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
+    fprintf('Cheb: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
+    
     K = apx(hyp,covg_sceig,X,opt4);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
     fprintf('Scaled eig: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
     
@@ -74,6 +81,8 @@ for nrun = 1:1
     
     K = apx(hyp,cov,X,opt6);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
     fprintf('Exact: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
+    
+    die
     
     for j = 1:1
         sur = build_surrogate(covg_lan,X,opt_sur);
@@ -106,15 +115,20 @@ for nrun = 1:1
     end
     hyp_recover(2) ={hyp_lan};
     
-    %{
-    tic;
-    temp3 = minimize(hyp0,@gp,-50,inf3,means,covg_lan,lik,X,Y);
-    hyp_recover(3) = {exp([temp3.cov',temp3.lik])};
-    time(3) = time(3) + toc;
-    [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
-    NLK(3) = {[nlZ,dnlZ.cov',dnlZ.lik]};
-    %}
-    
+    for j = 1:5
+        % Chebyshev
+        opt3.ldB2_cheby_hutch = sign(randn(N,10));
+        inf3 = @(varargin)infGaussLik(varargin{:},opt3);
+        tic;
+        temp3 = minimize(hyp0,@gp,-30,inf3,means,covg_cheb,lik,X,Y);
+        hyp_cheb(j,:) = exp([temp3.cov',temp2.lik]);
+        time(3) = time(3) + toc;
+        [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
+        NLK{3}(j, :) = {[nlZ,dnlZ.cov',dnlZ.lik]};
+        fprintf('Cheb: (%.3e, %.3e, %.3e)\n\n', exp([temp3.cov',temp3.lik]))
+    end
+    hyp_recover(3) = hyp_cheb;
+
     tic;
     temp4 = minimize(hyp0,@gp,-30,inf4,means,covg_sceig,lik,X,Y);
     hyp_recover(4) = {exp([temp4.cov',temp4.lik])};

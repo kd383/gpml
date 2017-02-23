@@ -138,7 +138,7 @@ elseif grid                                            % C)  Grid approximations
   if isfield(opt,'ldB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
   if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
   elseif lan,   method = 'lan'; ldpar = {method,hyp,n,Z,kmax,reorth};
-  elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd};
+  elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd,hyp};
   else ldpar = {[]}; 
   end
   [Kg,Mx] = feval(cov{:},hyp.cov,x,[],deg);  % grid cov structure, interp matrix
@@ -150,7 +150,6 @@ elseif grid                                            % C)  Grid approximations
   
   if length(x) == length(cov{3}{:})
       MVM = Kg.mvm;
-      die
   else
       MVM = @(x) Mx*Kg.mvm(Mx'*x);
   end
@@ -169,9 +168,8 @@ elseif grid                                            % C)  Grid approximations
       ldpar(end+1) = {dsB};
   else
       K.mvm = MVM;
-      if lan
-          die
-          dKxg = derivative_RBF(hyp,xg{:},1);
+      if lan || cheby
+          dKxg = derivative_Matern(3,hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
   end
@@ -275,11 +273,20 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
   dhyp.cov = [];                                                          % init
   method = ldpar{1};
   if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
-    dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
+    %dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
+    hyp = ldpar{6};
+    sigma = exp(hyp.lik);
+    dK = @(x)[ldpar{7}(x),2*sigma^2*x];
+    n = size(W,1);
     if nargout<2            % save some computation depending on required output
-      ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:5});
+      %ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:5});
+      ldB2 = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma)/2-n*hyp.lik;
     else
-      [ldB2,emax,dhyp.cov,dW] = logdet_sample(W,K.mvm,dK, ldpar{2:5});
+      [ldB2,dldB2] = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma,dK,3);
+      ldB2 = ldB2/2 - n*hyp.lik;
+      dhyp.cov = dldB2(1:2)'/2;
+      %dW = (n-dldB2(3)/2)*exp(2*hyp.lik)/2;
+      dW = dhyp.cov(2)*exp(2*hyp.lik)/2;
     end
   elseif strcmp(method,'sur') % surrogate approximation of logdet
       if nargout<3
