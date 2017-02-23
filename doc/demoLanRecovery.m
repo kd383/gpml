@@ -14,8 +14,8 @@ xg_lan = covGrid('create',X,true,ngrid_lan);
 xg_sceig = covGrid('create',X,true,ngrid_sceig);
 xu = linspace(min(X),max(X),ngrid_fitc)';
 
-%cov = {@(varargin)covMaterniso(3,varargin{:})};
-cov = {@covSEiso};
+cov = {@(varargin)covMaterniso(3,varargin{:})};
+%cov = {@covSEiso};
 covg_lan = {@apxGrid,cov,xg_lan};
 covg_sceig = {@apxGrid,cov,xg_sceig};
 covf = {@apxSparse,cov,xu};
@@ -24,7 +24,7 @@ means = {@meanZero};
 
 % Generate data
 hyp = struct('mean', [], 'cov', log([0.01;0.5]), 'lik', log(0.05));
-opt_Y.hyp = hyp; opt_Y.type = 'RBF'; opt_Y.cov = cov;
+opt_Y.hyp = hyp; opt_Y.type = 'Matern'; opt_Y.cov = cov;
 %Y = f(X) + .1*randn(N,1);
 
 time = zeros(1,7);
@@ -88,6 +88,7 @@ for nrun = 1:1
         time(1) = time(1) + toc;
         [~,nlZ,dnlZ] = infGaussLik(temp1,means,cov,lik,X,Y,opt6);
         NLK{1}(j,:) = [nlZ,dnlZ.cov',dnlZ.lik];
+        fprintf('Surrogate: (%.3e, %.3e, %.3e)\n\n', exp([temp1.cov',temp1.lik]))
     end
     hyp_recover(1) ={hyp_sur};
     
@@ -142,11 +143,16 @@ for nrun = 1:1
     result_NLK{nrun} = NLK;
 end
 
+[~,nlZ,dnlZ] = infGaussLik(hyp,means,cov,lik,X,Y,opt6);
+NLK(7) = {[nlZ,dnlZ.cov',dnlZ.lik]};
+ 
 fprintf('\n\n==========================================\n')
+fprintf('Surrogate: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{1}, time(1))
 if numel(hyp_recover{2}) == 3
     fprintf('Lanczos: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{2}, time(2))
 else
-    fprintf('Lanczos: (%.3e, %.3e, %.3e)  in %.3f (s)\n',mean(hyp_recover{2}),time(2)/size(hyp_recover{2},1))
+    nnruns = size(hyp_recover{2},1);
+    fprintf('Lanczos: (%.3e, %.3e, %.3e)  in %.3f (s)\n',mean(hyp_recover{2}),time(2)/nnruns)
 end
 fprintf('Scaled eig: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{4}, time(4))
 fprintf('FITC: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{5}, time(5))
