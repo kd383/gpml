@@ -1,5 +1,5 @@
 clearvars, close all, write_fig = 0; 
-N = 1000; ngrid = 3000;
+N =5000; ngrid = 2500;
 
 % Choose data points
 X = sort(4*rand(N,1)-2,'ascend');
@@ -7,7 +7,7 @@ X = sort(4*rand(N,1)-2,'ascend');
 
 % Setup SKI and FITC
 xg = covGrid('create',X,true,ngrid);
-xu = linspace(-2,2,ngrid/3)';
+xu = linspace(-2,2,800)';
 
 cov = {@(varargin)covMaterniso(3,varargin{:})};
 %cov = {@covSEiso};
