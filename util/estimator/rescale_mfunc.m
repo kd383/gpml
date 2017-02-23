@@ -18,7 +18,7 @@
 %    Hs: A function representing the scaled matrix
 %    ab: Transformation parameters: Hs = (H-b)/a
 %
-function [Hs, ab] = rescale_mfunc(H, n, range)
+function [Hs, ab, range] = rescale_mfunc(H, n, range)
 
   % Deal with matrix vs function
   if isa(H, 'function_handle')
@@ -42,7 +42,7 @@ function [Hs, ab] = rescale_mfunc(H, n, range)
     end
     range(2) = eigs(Hfun,n,1,'lm',opts);
   end
-  fudge = min(0.01, range(1)*1e-2);
+  fudge = min(0.01, range(1)*1e-4);
   % Parameters for linear mapping
   ab = [(range(2)-range(1))/(2-fudge); (range(2)+range(1))/2];
   Hs = @(x) (Hfun(x)-ab(2)*x)/ab(1);

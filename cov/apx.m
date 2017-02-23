@@ -169,7 +169,7 @@ elseif grid                                            % C)  Grid approximations
   else
       K.mvm = MVM;
       if lan || cheby
-          dKxg = derivative_RBF(hyp,xg{:},1);
+          dKxg = derivative_Matern(3,hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
   end
@@ -285,7 +285,8 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
       [ldB2,dldB2] = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma,dK,3);
       ldB2 = ldB2/2 - n*hyp.lik;
       dhyp.cov = dldB2(1:2)'/2;
-      dW = (n-dldB2(3))*exp(2*hyp.lik)/4;
+      %dW = (n-dldB2(3)/2)*exp(2*hyp.lik)/2;
+      dW = dhyp.cov(2)*exp(2*hyp.lik)/2;
     end
   elseif strcmp(method,'sur') % surrogate approximation of logdet
       if nargout<3

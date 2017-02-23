@@ -18,7 +18,7 @@ means = {@meanZero};
 
 % Generate data
 hyp = struct('mean', [], 'cov', log([0.01;0.5]), 'lik', log(0.05));
-opt_Y.hyp = hyp; opt_Y.type = 'Matern'; opt_Y.cov = cov;
+opt_Y.hyp = hyp; opt_Y.type = 'RBF'; opt_Y.cov = cov;
 %Y = f(X) + .1*randn(N,1);
 
 time = zeros(1,7);
@@ -34,11 +34,11 @@ opt2.cg_maxit = 1000; opt2.cg_tol = 1e-3; opt2.replace_diag = 1;
 opt2.ldB2_lan = 1; opt2.ldB2_lan_reorth = 1; opt2.ldB2_lan_kmax = 100;
 
 % Chebyshev
-opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 0; opt3.ldB2_cheby = 1;
-inf3 = @(varargin)infGaussLik(varargin{:},opt3);
+opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 1; opt3.ldB2_cheby = 1;
+opt3.ldB2_cheby_degree = 500;
 
 % Apx + No_Diag_Corr
-opt4.cg_maxit = 2000; opt4.cg_tol = 1e-3; opt4.replace_diag = 0;
+opt4.cg_maxit = 1000; opt4.cg_tol = 1e-3; opt4.replace_diag = 0;
 inf4 = @(varargin)infGaussLik(varargin{:},opt4);
 
 % FITC
@@ -49,8 +49,8 @@ inf5 = @(varargin)infGaussLik(varargin{:},opt5);
 opt6.cg_maxit = 1000; opt6.cg_tol = 1e-3; 
 inf6 = @(varargin)infGaussLik(varargin{:},opt6);
 
-for nrun = 1:1
-    hyp0 = struct('mean', [], 'cov', 0.9*hyp.cov,'lik', 1.2*hyp.lik);
+for nrun = 1:5
+    hyp0 = struct('mean', [], 'cov', 0.9*hyp.cov,'lik', 1.1*hyp.lik);
     Y = generate_data(X,opt_Y);
     data(:,nrun) = Y;
     hyp_recover = cell(6,1);
@@ -89,14 +89,16 @@ for nrun = 1:1
     end
     hyp_recover(2) ={hyp_lan};
     
-    %{
+    
+    opt3.ldB2_cheby_hutch = sign(randn(N,10));
+    inf3 = @(varargin)infGaussLik(varargin{:},opt3);
     tic;
-    temp3 = minimize(hyp0,@gp,-50,inf3,means,covg,lik,X,Y);
+    temp3 = minimize(hyp0,@gp,-30,inf3,means,covg,lik,X,Y);
     hyp_recover(3) = {exp([temp3.cov',temp3.lik])};
     time(4) = time(4) + toc;
     [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
     NLK(3) = {[nlZ,dnlZ.cov',dnlZ.lik]};
-    %}
+    
     
     tic;
     temp4 = minimize(hyp0,@gp,-30,inf4,means,covg,lik,X,Y);
@@ -122,7 +124,7 @@ for nrun = 1:1
     NLK(6) = {[nlZ,dnlZ.cov',dnlZ.lik]};
     result{nrun} = hyp_recover;
     result_NLK{nrun} = NLK;
-    
+   
 end
 
 
