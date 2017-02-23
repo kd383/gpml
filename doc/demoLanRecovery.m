@@ -56,7 +56,7 @@ opt6.cg_maxit = 1000; opt6.cg_tol = 1e-3;
 inf6 = @(varargin)infGaussLik(varargin{:},opt6);
 
 for nrun = 1:1
-    hyp0 = struct('mean', [], 'cov', 0.9*hyp.cov,'lik', 1.2*hyp.lik);
+    hyp0 = struct('mean', [], 'cov', 0.95*hyp.cov,'lik', 0.95*hyp.lik);
     Y = generate_data(X,opt_Y);
     data(:,nrun) = Y;
     hyp_recover = cell(6,1);
@@ -76,14 +76,14 @@ for nrun = 1:1
     fprintf('Exact: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
     
     for j = 1:1
-        sur = build_surrogate(covg,X,opt_sur);
+        sur = build_surrogate(covg_lan,X,opt_sur);
         % Sur + Lan + Diag_Corr
         opt1.cg_maxit = 1000; opt1.cg_tol = 1e-3; opt1.replace_diag = 1;
         opt1.ldB2_sur = sur;
         inf1 = @(varargin)infGaussLik(varargin{:},opt1);
         % Sur + Lan + Diag_Corr
         tic;
-        temp1 = minimize(hyp0,@gp,-30,inf1,means,covg,lik,X,Y);
+        temp1 = minimize(hyp0,@gp,-30,inf1,means,covg_lan,lik,X,Y);
         hyp_sur(j,:) = exp([temp1.cov',temp1.lik]);
         time(1) = time(1) + toc;
         [~,nlZ,dnlZ] = infGaussLik(temp1,means,cov,lik,X,Y,opt6);
