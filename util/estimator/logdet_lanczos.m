@@ -43,9 +43,13 @@ function [ldB2, dldB2] = logdet_lanczos(B,n,nZ,kmax,reorth,dB)
         wts = (V(1,:).').^2 * norm(Z(:,k))^2;
         ldB2(k) = sum(wts.*log(theta));
         if nargout > 1
-           dBZ = dB(Z);
-           Binvz = squeeze(Q(:,k,:))*(T(:,:,k)\[1;zeros(kmax-1,1)]);
-           dldB2(k,:) = norm(Z(:,k))*sum(bsxfun(@times,Binvz,dBZ(:,k:nZ:end)));
+            Binvz = squeeze(Q(:,k,:))*(T(:,:,k)\[1;zeros(kmax-1,1)]);
+            if iscell(dB)
+                dldB2(k,:) = norm(Z(:,k))*[dB{1}(Binvz,Z(:,k))',Binvz'*dB{2}(Z(:,k))];
+            else
+                dBZ = dB(Z);
+                dldB2(k,:) = norm(Z(:,k))*sum(bsxfun(@times,Binvz,dBZ(:,k:nZ:end)));
+            end
         end
     end
     ldB2 = real(mean(ldB2))/2;

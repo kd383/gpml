@@ -148,11 +148,8 @@ elseif grid                                            % C)  Grid approximations
   K.Mx = Mx;
   K.Kg = Kg;
   
-  if length(x) == length(cov{3}{:})
-      MVM = Kg.mvm;
-  else
-      MVM = @(x) Mx*Kg.mvm(Mx'*x);
-  end
+  K.mvm = @(x) Mx*Kg.mvm(Mx'*x);
+  %{
   flag = 0;
   if isfield(opt,'replace_diag') && opt.replace_diag
       flag = 1;
@@ -169,10 +166,19 @@ elseif grid                                            % C)  Grid approximations
   else
       K.mvm = MVM;
       if lan || cheby
-          dKxg = derivative_Matern(3,hyp,xg{:},1);
+          dKxg = derivative_RBF(hyp,xg{:},1);
           ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
       end
   end
+  %}
+  %{
+  if lan || cheby
+      dKxg = derivative_RBF(hyp,xg{:},1);
+      ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
+  end
+  %}
+  dK = @(x,y)apxGrid('dirder',Kg,xg,Mx,x,y);
+  ldpar(end+1) = {dK};
   K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
   K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
 end
@@ -300,9 +306,10 @@ function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
       if nargout <3
         ldB2 = logdet_lanczos(mvmB,ldpar{3:6});
       else          % estimation of derivative, rather than derivative of estimation
-          dB = @(x)[ldpar{7}(x)/exp(2*ldpar{2}.lik),K.mvm(x)];
+          %dB = @(x)[ldpar{7}(x)/exp(2*ldpar{2}.lik),K.mvm(x)];
+          dB = {@(x,y)ldpar{7}(x,y)/exp(2*ldpar{2}.lik),K.mvm};
           [ldB2,dldB2] = logdet_lanczos(mvmB,ldpar{3:6},dB);
-          dhyp.cov = dldB2(1:2)';
+          dhyp.cov = dldB2(1:6)';
           dW = dldB2(end);
       end       
   else

@@ -21,7 +21,7 @@ function [ldA,dldA] = logdet_cheb(Afun, n, nZ, N, sigma,dAfun,M)
     dldA = [];
     dc = [];
     % Rescale the matrix so eigenvalues are in [-1,1]
-    [Afuns,ab,range] = rescale_mfunc(Afun,n,sigma^2);
+    [Afuns,ab,range] = rescale_mfunc(Afun,n,[sigma^2,.13]);
     % Compute the Chebyshev coefficients of spectral density and the
     % derivative
     if nargout<=1
