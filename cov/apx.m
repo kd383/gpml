@@ -156,21 +156,28 @@ elseif grid                                            % C)  Grid approximations
     flag = 0;
     if isfield(opt,'replace_diag') && opt.replace_diag
         flag = 1;
-        %dd2 = exp(2*hyp.cov(2)) - sum(Mx.*(Kg.mvm(Mx')'),2); % Diagonal correction
+        
+%         dd_slow = exp(2*hyp.cov(2)) - sum(Mx.*(Kg.mvm(Mx')'),2); % Diagonal correction
         
         [n, m] = size(Mx);
-        dd = exp(2*hyp.cov(2))*ones(n, 1); % Diagonal of exact kernel
         e1 = zeros(m, 1); e1(1) = 1;
         KgVec = Kg.mvm(e1); % Extract Toeplitz vector from Kuu
         [rows, ~, vals] = find(Mx'); % cols is [1,1,1,1 , 2,2,2,2 , ... , n,n,n,n]
-        for i=1:n
-            q = vals(1+(i-1)*4:i*4);
-            ind = rows(1+(i-1)*4:i*4);
-            KK = KgVec(abs(ind - ind') + 1);
-            dd(i) = dd(i) - q'*KK*q; % Subtract quadratic form
-        end
+%         dd_quad = exp(2*hyp.cov(2))*ones(n, 1); % Diagonal of exact kernel
+%         for i=1:n
+%             q = vals(1+(i-1)*4:i*4);
+%             ind = rows(1+(i-1)*4:i*4);
+%             KK = KgVec(abs(ind - ind') + 1);
+%             dd_quad(i) = dd_quad(i) - q'*KK*q; % Subtract quadratic form
+%         end
         
-        %norm(dd - dd2)
+        dd_mex = exp(2*hyp.cov(2)) - kissgp_diag(vals, int32(rows), KgVec);
+        
+%         norm(dd_slow - dd_mex)
+%         norm(dd_slow - dd_quad)
+        
+        dd = dd_mex;
+        
         K.mvm = @(x) MVM(x)+ bsxfun(@times,dd,x);  % mvm with covariance matrix
         
         if strcmp(func2str(cov{2}{:}),'covSEiso')
