@@ -1,7 +1,7 @@
 clearvars, close all, write_fig = 0;
 N = 5000;
 ngrid_lan = 2000;
-ngrid_cheb = 2000;
+ngrid_cheb = 1000;
 ngrid_sceig = 2000; 
 ngrid_fitc = 750; 
 rng(1)
@@ -12,7 +12,7 @@ X = randn(N, 1);
 
 % Setup SKI and FITC
 xg_lan = covGrid('create',X,true,ngrid_lan);
-xg_cheb = covGrid('create',X,true,ngrid_lan);
+xg_cheb = covGrid('create',X,true,ngrid_cheb);
 xg_sceig = covGrid('create',X,true,ngrid_sceig);
 xu = linspace(min(X),max(X),ngrid_fitc)';
 
@@ -35,17 +35,17 @@ time = zeros(1,7);
 % Build surrogate
 opt_sur.npts = 300; opt_sur.ntrials = 1000; opt_sur.param = {{'cov','lik'},[2,1]};
 opt_sur.bounds = log([5e-3,0.1,1e-2;0.1,1,0.1]); opt_sur.method = 'lanczos';
-opt_sur.cg_maxit = 1000; opt_sur.cg_tol = 1e-5; opt_sur.replace_diag = 1; opt_sur.nZ = 10;
+opt_sur.cg_maxit = 1000; opt_sur.cg_tol = 1e-5; opt_sur.replace_diag = 0; opt_sur.nZ = 10;
 opt_sur.kmax = 100; opt_sur.reorth = 1;
 
 % Lan + Diag_Corr
-opt2.cg_maxit = 1000; opt2.cg_tol = 1e-3; opt2.replace_diag = 1;
+opt2.cg_maxit = 1000; opt2.cg_tol = 1e-3; opt2.replace_diag = 0;
 opt2.ldB2_lan = 1; opt2.ldB2_lan_reorth = 1; opt2.ldB2_lan_kmax = 100;
 
 % Chebyshev
-opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 1; opt3.ldB2_cheby = 1;
+opt3.cg_maxit = 1000; opt3.cg_tol = 1e-3; opt3.replace_diag = 0; opt3.ldB2_cheby = 1;
 inf3 = @(varargin)infGaussLik(varargin{:},opt3);
-opt3.ldB2_cheby_degree = 250;
+opt3.ldB2_cheby_degree = 200;
 
 % Apx + No_Diag_Corr
 opt4.cg_maxit = 2000; opt4.cg_tol = 1e-3; opt4.replace_diag = 0;
@@ -82,8 +82,7 @@ for nrun = 1:1
     K = apx(hyp,cov,X,opt6);[ldB2,solveKiW,dW,dldB2,L] = K.fun(ones(N,1)/exp(hyp.lik*2));temp=dldB2(zeros(N,1));
     fprintf('Exact: (%.3e, %.3e, %.3e)\n',[ldB2,temp.cov'])
     
-    die
-    
+    %{
     for j = 1:1
         sur = build_surrogate(covg_lan,X,opt_sur);
         % Sur + Lan + Diag_Corr
@@ -100,6 +99,8 @@ for nrun = 1:1
         fprintf('Surrogate: (%.3e, %.3e, %.3e)\n\n', exp([temp1.cov',temp1.lik]))
     end
     hyp_recover(1) ={hyp_sur};
+    %}
+
     
     for j = 1:5
         % Lan + Diag_Corr
@@ -124,11 +125,12 @@ for nrun = 1:1
         hyp_cheb(j,:) = exp([temp3.cov',temp3.lik]);
         time(3) = time(3) + toc;
         [~,nlZ,dnlZ] = infGaussLik(temp3,means,cov,lik,X,Y,opt6);
-        NLK{3}(j, :) = {[nlZ,dnlZ.cov',dnlZ.lik]};
+        NLK{3}(j, :) = [nlZ,dnlZ.cov',dnlZ.lik];
         fprintf('Cheb: (%.3e, %.3e, %.3e)\n\n', exp([temp3.cov',temp3.lik]))
     end
-    hyp_recover(3) = hyp_cheb;
+    hyp_recover(3) = {hyp_cheb};
 
+    %{
     tic;
     temp4 = minimize(hyp0,@gp,-30,inf4,means,covg_sceig,lik,X,Y);
     hyp_recover(4) = {exp([temp4.cov',temp4.lik])};
@@ -155,40 +157,27 @@ for nrun = 1:1
     
     result{nrun} = hyp_recover;
     result_NLK{nrun} = NLK;
+    %}
 end
 
 [~,nlZ,dnlZ] = infGaussLik(hyp,means,cov,lik,X,Y,opt6);
 NLK(7) = {[nlZ,dnlZ.cov',dnlZ.lik]};
  
 fprintf('\n\n==========================================\n')
-fprintf('Surrogate: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{1}, time(1))
+fprintf('Surrogate: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{1}(1), hyp_recover{1}, time(1))
 if numel(hyp_recover{2}) == 3
-    fprintf('Lanczos: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{2}, time(2))
+    fprintf('Lanczos: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{2}(1), hyp_recover{2}, time(2))
 else
     nnruns = size(hyp_recover{2},1);
-    fprintf('Lanczos: (%.3e, %.3e, %.3e)  in %.3f (s)\n',exp(mean(log(hyp_recover{2}))),time(2)/nnruns)
+    fprintf('Lanczos: %.3e (%.3e, %.3e, %.3e)  in %.3f (s)\n',mean(NLK{2}(:,1)), exp(mean(log(hyp_recover{2}))),time(2)/nnruns)
 end
 if numel(hyp_recover{3}) == 3
-    fprintf('Chebyshev: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{3}, time(3))
+    fprintf('Chebyshev: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{3}(1), hyp_recover{3}, time(3))
 else
     nnruns = size(hyp_recover{3},1);
-    fprintf('Chebyshev: (%.3e, %.3e, %.3e)  in %.3f (s)\n',exp(mean(log(hyp_recover{3}))),time(3)/nnruns)
+    fprintf('Chebyshev: %.3e (%.3e, %.3e, %.3e)  in %.3f (s)\n',mean(NLK{3}(:,1)), exp(mean(log(hyp_recover{3}))),time(3)/nnruns)
 end
-fprintf('Scaled eig: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{4}, time(4))
-fprintf('FITC: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{5}, time(5))
-fprintf('Exact: (%.3e, %.3e, %.3e) in %.3f (s)\n',hyp_recover{6}, time(6))
-
-%{
-result = exp([hyp.cov;hyp.lik]);
-% result = [exp([hyp.cov';hyp.lik]);hyp.mean'];
-%[result hyp_est' hyp_exact'] % Use this line when only one run
-result = [result, mean(hyp_est)', std(hyp_est)', mean(hyp_grid)', std(hyp_grid)',...
-    mean(hyp_sparse)', std(hyp_sparse)'];% mean(hyp_exact)', std(hyp_exact)'];
-T = array2table(result,'VariableNames',{'True','Sur_Lan_Grid','Error1',...
-    'Grid','Error2','Sparse','Error3'})%,'Exact','Error4'})
-time(2:5) = time(2:5)/5;
-method = {'Sur','Grid','Sparse','Exact'};
-for k = 1:4
-    fprintf('Time for %s optimization is %.3f.\n',method{k},time(k+1));
-end
-%}
+fprintf('Scaled eig: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{4}(1),hyp_recover{4}, time(4))
+fprintf('FITC: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{5}(1),hyp_recover{5}, time(5))
+fprintf('Exact: %.3e (%.3e, %.3e, %.3e) in %.3f (s)\n',NLK{6}(1),hyp_recover{6}, time(6))
+fprintf('True: %.3e (%.3e, %.3e, %.3e)\n', NLK{7}(1),exp([hyp.cov',hyp.lik]))

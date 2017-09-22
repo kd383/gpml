@@ -1,5 +1,5 @@
 clear
-N = 1000;
+N = 10000;
 X = sort(4*rand(N,1)-2,'ascend');
 xg = apxGrid('create',X,true,500);
 %cov = {@covSEiso};

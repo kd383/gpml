@@ -10,7 +10,7 @@ function K = apx(hyp,cov,x,opt)
 %    Note that (1) is faster but it is only applicable if all W are positive.
 %
 % B) Sparse covariance approximations aka FITC [4], VFE [5] and SPEP [3].
-%    We have a parameter opt.s from [0,1], the power in sparse power EP [3] 
+%    We have a parameter opt.s from [0,1], the power in sparse power EP [3]
 %    interpolating between the Fully Independent Training Conditionals (FITC)
 %    approach [4] and a Variational Free Energy (VFE) approximation [5].
 %    In particular:
@@ -90,271 +90,289 @@ grid   = strcmp(c1,'apxGrid')   || strcmp(c1,'covGrid');
 exact = ~grid && ~Sparse;
 
 if exact                   % A) Exact computations using dense matrix operations
-  if strcmp(c1,'numeric'), K = cov; dK = [];           % catch dense matrix case
-  else
-    [K,dK] = feval(cov{:},hyp.cov,x);     % covariance matrix and dir derivative
-  end
-  K = struct('mvm',@(x)mvmK_exact(K,x), 'P',@(x)x, 'Pt',@(x)x,... % mvm and proj 
-             'fun',@(W)ldB2_exact(W,K,dK));
-
+    if strcmp(c1,'numeric'), K = cov; dK = [];           % catch dense matrix case
+    else
+        [K,dK] = feval(cov{:},hyp.cov,x);     % covariance matrix and dir derivative
+    end
+    K = struct('mvm',@(x)mvmK_exact(K,x), 'P',@(x)x, 'Pt',@(x)x,... % mvm and proj
+        'fun',@(W)ldB2_exact(W,K,dK));
+    
 elseif Sparse                                         % B) Sparse approximations
-  if isfield(opt,'s'), s = opt.s; else s = 1.0; end            % default is FITC
-  if isfield(hyp,'xu'), cov{3} = hyp.xu; end   % hyp.xu provided, replace cov{3}
-  xu = cov{3}; nu = size(xu,1);                        % extract inducing points
-  [Kuu,   dKuu]   = feval(cov{2}{:}, hyp.cov, xu);     % get the building blocks
-  [Ku,    dKu]    = feval(cov{2}{:}, hyp.cov, xu, x);
-  [diagK, ddiagK] = feval(cov{2}{:}, hyp.cov, x, 'diag');
-  snu2 = 1e-6*(trace(Kuu)/nu);                 % stabilise by 0.1% of signal std
-  Luu  = chol(Kuu+snu2*eye(nu));                       % Kuu + snu2*I = Luu'*Luu
-  V  = Luu'\Ku;                                   % V = inv(Luu')*Ku => V'*V = Q
-  g = max(diagK-sum(V.*V,1)',0);                         % g = diag(K) - diag(Q)
-  K.mvm = @(x) V'*(V*x) + bsxfun(@times,s*g,x);   % efficient matrix-vector mult
-  K.P = @(x) Luu\(V*x); K.Pt = @(x) V'*(Luu'\x);         % projection operations
-  xud = isfield(hyp,'xu');      % flag deciding whether to compute hyp.xu derivs
-  K.fun = @(W) ldB2_sparse(W,V,g,Luu,dKuu,dKu,ddiagK,s,xud);
-
+    if isfield(opt,'s'), s = opt.s; else s = 1.0; end            % default is FITC
+    if isfield(hyp,'xu'), cov{3} = hyp.xu; end   % hyp.xu provided, replace cov{3}
+    xu = cov{3}; nu = size(xu,1);                        % extract inducing points
+    [Kuu,   dKuu]   = feval(cov{2}{:}, hyp.cov, xu);     % get the building blocks
+    [Ku,    dKu]    = feval(cov{2}{:}, hyp.cov, xu, x);
+    [diagK, ddiagK] = feval(cov{2}{:}, hyp.cov, x, 'diag');
+    snu2 = 1e-6*(trace(Kuu)/nu);                 % stabilise by 0.1% of signal std
+    Luu  = chol(Kuu+snu2*eye(nu));                       % Kuu + snu2*I = Luu'*Luu
+    V  = Luu'\Ku;                                   % V = inv(Luu')*Ku => V'*V = Q
+    g = max(diagK-sum(V.*V,1)',0);                         % g = diag(K) - diag(Q)
+    K.mvm = @(x) V'*(V*x) + bsxfun(@times,s*g,x);   % efficient matrix-vector mult
+    K.P = @(x) Luu\(V*x); K.Pt = @(x) V'*(Luu'\x);         % projection operations
+    xud = isfield(hyp,'xu');      % flag deciding whether to compute hyp.xu derivs
+    K.fun = @(W) ldB2_sparse(W,V,g,Luu,dKuu,dKu,ddiagK,s,xud);
+    
 elseif grid                                            % C)  Grid approximations
-  n = size(x,1);
-  if isfield(opt,'cg_tol'), cgtol = opt.cg_tol;       % stop conjugate gradients
-  else cgtol = 1e-6; end                                        % same as in pcg
-  if isfield(opt,'cg_maxit'), cgmit = opt.cg_maxit;    % number of cg iterations
-  else cgmit = min(n,20); end                                   % same as in pcg
-  if isfield(opt,'deg'), deg = opt.deg; else deg = 3; end     % interpol. degree
-  if isfield(opt,'stat'), stat = opt.stat; else stat = false; end    % show stat
-  cgpar = {cgtol,cgmit}; xg = cov{3}; p = numel(xg);  % conjugate gradient, grid
-  % load options for chebyshev
-  if isfield(opt,'ldB2_cheby'),cheby=opt.ldB2_cheby; else cheby=false; end
-  if isfield(opt,'ldB2_cheby_hutch'),m=opt.ldB2_cheby_hutch; else m=10; end
-  if isfield(opt,'ldB2_cheby_degree'),d=opt.ldB2_cheby_degree; else d=15; end
-  if isfield(opt,'ldB2_cheby_maxit'),mit=opt.ldB2_cheby_maxit; else mit=50; end
-  if isfield(opt,'ldB2_cheby_seed'),sd=opt.ldB2_cheby_seed; else sd=[]; end
-  % load options for lanczos
-  if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
-  if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
-  if length(nZ)==1, Z = sign(randn(n,nZ)); else Z = nZ;  end
-  if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=100; end
-  if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
-  % load options for surrogate
-  if isfield(opt,'ldB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
-  if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
-  elseif lan,   method = 'lan'; ldpar = {method,hyp,n,Z,kmax,reorth};
-  elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd,hyp};
-  else ldpar = {[]}; 
-  end
-  [Kg,Mx] = feval(cov{:},hyp.cov,x,[],deg);  % grid cov structure, interp matrix
-  if stat    % show some information about the nature of the p Kronecker factors
-    fprintf(apxGrid('info',Kg,Mx,xg,deg));
-  end
-  K.Mx = Mx;
-  K.Kg = Kg;
-  
-  if length(x) == length(cov{3}{:})
-      MVM = Kg.mvm;
-  else
-      MVM = @(x) Mx*Kg.mvm(Mx'*x);
-  end
-  flag = 0;
-  if isfield(opt,'replace_diag') && opt.replace_diag
-      flag = 1;
-      dd = exp(2*hyp.cov(2)) - sum(Mx.*(Kg.mvm(Mx')'),2);
-      K.mvm = @(x) MVM(x)+ bsxfun(@times,dd,x);  % mvm with covariance matrix
-
-      if strcmp(func2str(cov{2}{:}),'covSEiso')
-          dB = deriv_cor(hyp,xg{:},Mx,1);
-      else
-          dB = deriv_cor(hyp,xg{:},Mx,2);
-      end
-      dsB = @(x)dB(x)*exp(2*hyp.lik);
-      ldpar(end+1) = {dsB};
-  else
-      K.mvm = MVM;
-      if lan || cheby
-          dKxg = derivative_Matern(3,hyp,xg{:},1);
-          ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
-      end
-  end
-  K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
-  K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
+    n = size(x,1);
+    if isfield(opt,'cg_tol'), cgtol = opt.cg_tol;       % stop conjugate gradients
+    else cgtol = 1e-6; end                                        % same as in pcg
+    if isfield(opt,'cg_maxit'), cgmit = opt.cg_maxit;    % number of cg iterations
+    else cgmit = min(n,20); end                                   % same as in pcg
+    if isfield(opt,'deg'), deg = opt.deg; else deg = 3; end     % interpol. degree
+    if isfield(opt,'stat'), stat = opt.stat; else stat = false; end    % show stat
+    cgpar = {cgtol,cgmit}; xg = cov{3}; p = numel(xg);  % conjugate gradient, grid
+    % load options for chebyshev
+    if isfield(opt,'ldB2_cheby'),cheby=opt.ldB2_cheby; else cheby=false; end
+    if isfield(opt,'ldB2_cheby_hutch'),m=opt.ldB2_cheby_hutch; else m=10; end
+    if isfield(opt,'ldB2_cheby_degree'),d=opt.ldB2_cheby_degree; else d=15; end
+    if isfield(opt,'ldB2_cheby_maxit'),mit=opt.ldB2_cheby_maxit; else mit=50; end
+    if isfield(opt,'ldB2_cheby_seed'),sd=opt.ldB2_cheby_seed; else sd=[]; end
+    % load options for lanczos
+    if isfield(opt,'ldB2_lan'),lan=opt.ldB2_lan; else lan=false; end
+    if isfield(opt,'ldB2_lan_hutch'),nZ=opt.ldB2_lan_hutch; else nZ=ceil(log(n)); end
+    if length(nZ)==1, Z = sign(randn(n,nZ)); else Z = nZ;  end
+    if isfield(opt,'ldB2_lan_kmax'),kmax=opt.ldB2_lan_kmax; else kmax=100; end
+    if isfield(opt,'ldB2_lan_reorth'), reorth=opt.ldB2_lan_reorth; else reorth=0; end
+    % load options for surrogate
+    if isfield(opt,'ldB2_sur'), sur=opt.ldB2_sur; else sur=[]; end
+    if ~isempty(sur), method = 'sur'; ldpar = {method,sur,hyp};   % logdet parameters
+    elseif lan,   method = 'lan'; ldpar = {method,hyp,n,Z,kmax,reorth};
+    elseif cheby, method = 'cheby';ldpar = {method,m,d,mit,sd,hyp};
+    else ldpar = {[]};
+    end
+    [Kg,Mx] = feval(cov{:},hyp.cov,x,[],deg);  % grid cov structure, interp matrix
+    if stat    % show some information about the nature of the p Kronecker factors
+        fprintf(apxGrid('info',Kg,Mx,xg,deg));
+    end
+    K.Mx = Mx;
+    K.Kg = Kg;
+    
+    if length(x) == length(cov{3}{:})
+        MVM = Kg.mvm;
+    else
+        MVM = @(x) Mx*Kg.mvm(Mx'*x);
+    end
+    flag = 0;
+    if isfield(opt,'replace_diag') && opt.replace_diag
+        flag = 1;
+        %dd2 = exp(2*hyp.cov(2)) - sum(Mx.*(Kg.mvm(Mx')'),2); % Diagonal correction
+        
+        [n, m] = size(Mx);
+        dd = exp(2*hyp.cov(2))*ones(n, 1); % Diagonal of exact kernel
+        e1 = zeros(m, 1); e1(1) = 1;
+        KgVec = Kg.mvm(e1); % Extract Toeplitz vector from Kuu
+        [rows, ~, vals] = find(Mx'); % cols is [1,1,1,1 , 2,2,2,2 , ... , n,n,n,n]
+        for i=1:n
+            q = vals(1+(i-1)*4:i*4);
+            ind = rows(1+(i-1)*4:i*4);
+            KK = KgVec(abs(ind - ind') + 1);
+            dd(i) = dd(i) - q'*KK*q; % Subtract quadratic form
+        end
+        
+        %norm(dd - dd2)
+        K.mvm = @(x) MVM(x)+ bsxfun(@times,dd,x);  % mvm with covariance matrix
+        
+        if strcmp(func2str(cov{2}{:}),'covSEiso')
+            dB = deriv_cor(hyp,xg{:},Mx,1);
+        else
+            dB = deriv_cor(hyp,xg{:},Mx,2);
+        end
+        dsB = @(x)dB(x)*exp(2*hyp.lik);
+        ldpar(end+1) = {dsB};
+    else
+        K.mvm = MVM;
+        if lan || cheby
+            if strcmp(func2str(cov{2}{:}),'covSEiso')
+                dKxg = derivative_RBF(hyp,xg{:},1);
+            else
+                dKxg = derivative_Matern(3,hyp,xg{:},1);
+            end
+            ldpar(end+1) = {@(x)Mx*dKxg(Mx'*x)};
+        end
+    end
+    K.P = @(x)x; K.Pt = @(x)x;                             % projection operations
+    K.fun = @(W) ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag);
 end
 
 % A) Exact computations using dense matrix operations =========================
 function [ldB2,solveKiW,dW,dldB2,L] = ldB2_exact(W,K,dK)
-  isWneg = any(W<0); n = numel(W);
-  if isWneg                  % switch between Cholesky and LU decomposition mode
+isWneg = any(W<0); n = numel(W);
+if isWneg                  % switch between Cholesky and LU decomposition mode
     A = eye(n) + bsxfun(@times,K,W');                     % asymmetric A = I+K*W
     [L,U,P] = lu(A); u = diag(U);         % compute LU decomposition, A = P'*L*U
     signU = prod(sign(u));                                           % sign of U
     detP = 1;               % compute sign (and det) of the permutation matrix P
     p = P*(1:n)';
     for i=1:n                                                     % swap entries
-      if i~=p(i), detP = -detP; j = find(p==i); p([i,j]) = p([j,i]); end
+        if i~=p(i), detP = -detP; j = find(p==i); p([i,j]) = p([j,i]); end
     end
     if signU~=detP     % log becomes complex for negative values, encoded by inf
-      ldB2 = Inf;
+        ldB2 = Inf;
     else          % det(L) = 1 and U triangular => det(A) = det(P)*prod(diag(U))
-      ldB2 = sum(log(abs(u)))/2;
+        ldB2 = sum(log(abs(u)))/2;
     end                                            % compute inverse if required
     if nargout>1, Q = U\(L\P); solveKiW = @(r) bsxfun(@times,W,Q*r); end
     if nargout>4, L = -diag(W)*Q; end                              % overwrite L
-  else                                                 % symmetric B = I+sW*K*sW
+else                                                 % symmetric B = I+sW*K*sW
     sW = sqrt(W); L = chol(eye(n)+sW*sW'.*K);             % Cholesky factor of B
     ldB2 = sum(log(diag(L)));                                    % log(det(B))/2
     solveKiW = @(r) bsxfun(@times,solve_chol(L,bsxfun(@times,r,sW)),sW);
     if nargout>2, Q = bsxfun(@times,1./sW,solve_chol(L,diag(sW))); end
-  end
-  if nargout>2
+end
+if nargout>2
     dW = sum(Q.*K,2)/2;            % d log(det(B))/2 / d W = diag(inv(inv(K)+W))
     dldB2 = @(varargin) ldB2_deriv_exact(W,dK,Q, varargin{:});     % derivatives
-  end
+end
 
 function dhyp = ldB2_deriv_exact(W,dK,Q, alpha,a,b)
-  if nargin>3, R = alpha*alpha'; else R = 0; end
-  if nargin>5, R = R + 2*a*b'; end
-  dhyp.cov = dK( bsxfun(@times,Q,W) - R )/2;
+if nargin>3, R = alpha*alpha'; else R = 0; end
+if nargin>5, R = R + 2*a*b'; end
+dhyp.cov = dK( bsxfun(@times,Q,W) - R )/2;
 
 function z = mvmK_exact(K,x)
-  if size(x,2)==size(x,1) && max(max( abs(x-eye(size(x))) ))<eps      % x=eye(n)
+if size(x,2)==size(x,1) && max(max( abs(x-eye(size(x))) ))<eps      % x=eye(n)
     z = K;                             % avoid O(n^3) operation as it is trivial
-  else
+else
     z = K*x;
-  end
+end
 
 % B) Sparse approximations ====================================================
 function [ldB2,solveKiW,dW,dldB2,L]=ldB2_sparse(W,V,g,Luu,dKuu,dKu,ddiagK,s,xud)
-  z = s*g.*W; t = 1/s*log(z+1); i = z<1e-4;  % s=0: t = g*W, s=1: t = log(g*W+1)
-  t(i) = g(i).*W(i).*(1-z(i)/2+z(i).^2/3);         % 2nd order Taylor for tiny z
-  dt = 1./(z+1); d = W.*dt;                               % evaluate derivatives
-  nu = size(Luu,1); Vd = bsxfun(@times,V,d');
-  Lu = chol(eye(nu) + V*Vd'); LuV = Lu'\V;               % Lu'*Lu=I+V*diag(d)*V'
-  ldB2 = sum(log(diag(Lu))) + sum(t)/2;    % s=1 => t=log(g.*W+1), s=0 => t=g.*W
-  md = @(r) bsxfun(@times,d,r); solveKiW = @(r) md(r) - md(LuV'*(LuV*md(r)));
-  if nargout>2                % dW = d log(det(B))/2 / d W = diag(inv(inv(K)+W))
+z = s*g.*W; t = 1/s*log(z+1); i = z<1e-4;  % s=0: t = g*W, s=1: t = log(g*W+1)
+t(i) = g(i).*W(i).*(1-z(i)/2+z(i).^2/3);         % 2nd order Taylor for tiny z
+dt = 1./(z+1); d = W.*dt;                               % evaluate derivatives
+nu = size(Luu,1); Vd = bsxfun(@times,V,d');
+Lu = chol(eye(nu) + V*Vd'); LuV = Lu'\V;               % Lu'*Lu=I+V*diag(d)*V'
+ldB2 = sum(log(diag(Lu))) + sum(t)/2;    % s=1 => t=log(g.*W+1), s=0 => t=g.*W
+md = @(r) bsxfun(@times,d,r); solveKiW = @(r) md(r) - md(LuV'*(LuV*md(r)));
+if nargout>2                % dW = d log(det(B))/2 / d W = diag(inv(inv(K)+W))
     dW = sum(LuV.*((LuV*Vd')*V),1)' + s*g.*d.*sum(LuV.*LuV,1)';
     dW = dt.*(g+sum(V.*V,1)'-dW)/2;                % add trace "correction" term
     dldB2 = @(varargin) ldB2_deriv_sparse(V,Luu,d,LuV,dKuu,dKu,ddiagK,s,xud,...
-                                                                   varargin{:});
+        varargin{:});
     if nargout>4
-      L = solve_chol(Lu*Luu,eye(nu))-solve_chol(Luu,eye(nu));   % Sigma-inv(Kuu)
+        L = solve_chol(Lu*Luu,eye(nu))-solve_chol(Luu,eye(nu));   % Sigma-inv(Kuu)
     end
-  end
+end
 
 function dhyp = ldB2_deriv_sparse(V,Luu,d,LuV,dKuu,dKu,ddiagK,s,xud,alpha,a,b)
-  % K + 1./W = V'*V + inv(D), D = diag(d)
-  % Q = inv(K+inv(W)) = inv(V'*V + diag(1./d)) = diag(d) - LuVd'*LuVd;
-  LuVd = bsxfun(@times,LuV,d'); diagQ = d - sum(LuVd.*LuVd,1)';
-  F = Luu\V; Qu = bsxfun(@times,F,d') - (F*LuVd')*LuVd;
-  if nargin>9, diagQ = diagQ-alpha.*alpha; Qu = Qu-(F*alpha)*alpha'; end
-  Quu = Qu*F';
-  if nargin>11
+% K + 1./W = V'*V + inv(D), D = diag(d)
+% Q = inv(K+inv(W)) = inv(V'*V + diag(1./d)) = diag(d) - LuVd'*LuVd;
+LuVd = bsxfun(@times,LuV,d'); diagQ = d - sum(LuVd.*LuVd,1)';
+F = Luu\V; Qu = bsxfun(@times,F,d') - (F*LuVd')*LuVd;
+if nargin>9, diagQ = diagQ-alpha.*alpha; Qu = Qu-(F*alpha)*alpha'; end
+Quu = Qu*F';
+if nargin>11
     diagQ = diagQ-2*a.*b; Qu = Qu-(F*a)*b'-(F*b)*a'; Quu = Quu-2*(F*a)*(F*b)';
-  end
-  diagQ = s*diagQ + (1-s)*d;                          % take care of s parameter
-  Qu = Qu - bsxfun(@times,F,diagQ'); Quu = Quu - bsxfun(@times,F,diagQ')*F';
-  nu = size(Quu,1); Quu = Quu + 1e-6*trace(Quu)/nu*eye(nu);
-  if xud
+end
+diagQ = s*diagQ + (1-s)*d;                          % take care of s parameter
+Qu = Qu - bsxfun(@times,F,diagQ'); Quu = Quu - bsxfun(@times,F,diagQ')*F';
+nu = size(Quu,1); Quu = Quu + 1e-6*trace(Quu)/nu*eye(nu);
+if xud
     dhyp.cov = ddiagK(diagQ)/2; dhyp.xu = 0;
     [dc,dx] = dKu(Qu);   dhyp.cov = dhyp.cov + dc;   dhyp.xu = dhyp.xu + dx;
     [dc,dx] = dKuu(Quu); dhyp.cov = dhyp.cov - dc/2; dhyp.xu = dhyp.xu - dx/2;
-  else
+else
     dhyp.cov = ddiagK(diagQ)/2 + dKu(Qu) - dKuu(Quu)/2;
-  end
+end
 
 
 % C)  Grid approximations =====================================================
 function [ldB2,solveKiW,dW,dldB2,L] = ldB2_grid(W,K,Kg,xg,Mx,cgpar,ldpar,flag)
-  if all(W>=0)                                 % well-conditioned symmetric case
+if all(W>=0)                                 % well-conditioned symmetric case
     sW = sqrt(W); msW = @(x) bsxfun(@times,sW,x);
     mvmB = @(x) msW(K.mvm(msW(x)))+x;
     solveKiW = @(r) msW(linsolve(msW(r),mvmB,cgpar{:}));
-  else                 % less well-conditioned symmetric case if some negative W
+else                 % less well-conditioned symmetric case if some negative W
     mvmKiW = @(x) K.mvm(x)+bsxfun(@times,1./W,x);
     solveKiW = @(r) linsolve(r,mvmKiW,cgpar{:});
-  end                                                   % K*v = Mx*Kg.mvm(Mx'*v)
-  dhyp.cov = [];                                                          % init
-  method = ldpar{1};
-  if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
+end                                                   % K*v = Mx*Kg.mvm(Mx'*v)
+dhyp.cov = [];                                                          % init
+method = ldpar{1};
+if strcmp(method,'cheby')   % stochastic estimation of logdet cheby/hutchinson
     %dK = @(a,b) apxGrid('dirder',Kg,xg,Mx,a,b);
     hyp = ldpar{6};
     sigma = exp(hyp.lik);
     dK = @(x)[ldpar{7}(x),2*sigma^2*x];
     n = size(W,1);
     if nargout<2            % save some computation depending on required output
-      %ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:5});
-      ldB2 = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma)/2-n*hyp.lik;
+        %ldB2 = logdet_sample(W,K.mvm,dK, ldpar{2:5});
+        ldB2 = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma)/2-n*hyp.lik;
     else
-      [ldB2,dldB2] = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma,dK,3);
-      ldB2 = ldB2/2 - n*hyp.lik;
-      dhyp.cov = dldB2(1:2)'/2;
-      %dW = (n-dldB2(3)/2)*exp(2*hyp.lik)/2;
-      dW = dhyp.cov(2)*exp(2*hyp.lik)/2;
+        [ldB2,dldB2] = logdet_cheb(@(x)K.mvm(x)+exp(2*hyp.lik)*x,n,ldpar{2:3},sigma,dK,3);
+        ldB2 = ldB2/2 - n*hyp.lik;
+        dhyp.cov = dldB2(1:2)'/2;
+        %dW = (n-dldB2(3)/2)*exp(2*hyp.lik)/2;
+        dW = dhyp.cov(2)*exp(2*hyp.lik)/2;
     end
-  elseif strcmp(method,'sur') % surrogate approximation of logdet
-      if nargout<3
-          ldB2 = ldpar{2}.predict(ldpar{3});
-      else
-          hyp = ldpar{3};
-          [ldB2, val] = ldpar{2}.predict(cell2mat(struct2cell(hyp))');
-          dhyp.cov = val(1:end-1)'; dW = -val(end)*exp(2*hyp.lik)/2;
-      end
-  elseif strcmp(method,'lan') % stochastic estimation of logdet lanczos/hutchinson
-      if nargout <3
+elseif strcmp(method,'sur') % surrogate approximation of logdet
+    if nargout<3
+        ldB2 = ldpar{2}.predict(ldpar{3});
+    else
+        hyp = ldpar{3};
+        [ldB2, val] = ldpar{2}.predict(cell2mat(struct2cell(hyp))');
+        dhyp.cov = val(1:end-1)'; dW = -val(end)*exp(2*hyp.lik)/2;
+    end
+elseif strcmp(method,'lan') % stochastic estimation of logdet lanczos/hutchinson
+    if nargout <3
         ldB2 = logdet_lanczos(mvmB,ldpar{3:6});
-      else          % estimation of derivative, rather than derivative of estimation
-          dB = @(x)[ldpar{7}(x)/exp(2*ldpar{2}.lik),K.mvm(x)];
-          [ldB2,dldB2] = logdet_lanczos(mvmB,ldpar{3:6},dB);
-          dhyp.cov = dldB2(1:2)';
-          dW = dldB2(end);
-      end       
-  else
+    else          % estimation of derivative, rather than derivative of estimation
+        dB = @(x)[ldpar{7}(x)/exp(2*ldpar{2}.lik),K.mvm(x)];
+        [ldB2,dldB2] = logdet_lanczos(mvmB,ldpar{3:6},dB);
+        dhyp.cov = dldB2(1:2)';
+        dW = dldB2(end);
+    end
+else
     s = 3;                                    % Whittle embedding overlap factor
     [V,ee,e] = apxGrid('eigkron',Kg,xg,s);         % perform eigen-decomposition
     [ldB2,de,dW] = logdet_fiedler(e,W);     % Fiedler's upper bound, derivatives
     de = de.*double(e>0); % chain rule of max(e,0) in eigkron, Q = V*diag(de)*V'
     if nargout>3, dhyp.cov = ldB2_deriv_grid_fiedler(Kg,xg,V,ee,de,s); end
-  end
-  if flag
-      dldB2 = @(alpha) ldB2_deriv_grid(dhyp, Kg,xg,Mx, alpha,ldpar{end});
-  else
-      dldB2 = @(varargin) ldB2_deriv_grid(dhyp, Kg,xg,Mx, varargin{:});
-  end
-  if ~isreal(ldB2), error('Too many negative W detected.'), end
-  L = @(r) -K.P(solveKiW(K.Pt(r)));
+end
+if flag
+    dldB2 = @(alpha) ldB2_deriv_grid(dhyp, Kg,xg,Mx, alpha,ldpar{end});
+else
+    dldB2 = @(varargin) ldB2_deriv_grid(dhyp, Kg,xg,Mx, varargin{:});
+end
+if ~isreal(ldB2), error('Too many negative W detected.'), end
+L = @(r) -K.P(solveKiW(K.Pt(r)));
 
 function dhyp = ldB2_deriv_grid_fiedler(Kg,xg,V,ee,de,s)
-  p = numel(Kg.kron);                              % number of Kronecker factors
-  ng = [apxGrid('size',xg)',1];                                 % grid dimension
-  dhyp = [];                              % dhyp(i) = trace( V*diag(de)*V'*dKi )
-  for i=1:p
+p = numel(Kg.kron);                              % number of Kronecker factors
+ng = [apxGrid('size',xg)',1];                                 % grid dimension
+dhyp = [];                              % dhyp(i) = trace( V*diag(de)*V'*dKi )
+for i=1:p
     z = reshape(de,ng); Vi = V{i};
     for j=1:p, if i~=j, z = apxGrid('tmul',ee{j}(:)',z,j); end, end
     if isnumeric(Vi)
-      Q = bsxfun(@times,Vi,z(:)')*Vi';
-      dhci = Kg.kron(i).dfactor(Q);
+        Q = bsxfun(@times,Vi,z(:)')*Vi';
+        dhci = Kg.kron(i).dfactor(Q);
     else
-      kii = Kg.kron(i).factor.kii;
-      [junk,ni] = apxGrid('expand',xg{i}); di = numel(ni);
-      xs = cell(di,1);                % generic (Strang) circular embedding grid
-      for j=1:di, n2 = floor(ni(j)-1/2)+1; xs{j} = [1:n2,n2-2*ni(j)+2:0]'; end
-      Fz = real(fftn(reshape(z,[ni(:)',1])));  % imaginary part of deriv is zero
-      rep = 2*s*ones(1,di); if di==1, rep = [rep,1]; end           % replication
-      Fzw = repmat(Fz,rep); % replicate i.e. perform transpose of circ operation
-      [junk,xw] = apxGrid('circ',kii,ni,s);    % get Whittle circ embedding grid
-      [junk,dkwi] = kii(apxGrid('expand',xw));             % evaluate derivative
-      dhci = dkwi(Fzw(:));
+        kii = Kg.kron(i).factor.kii;
+        [junk,ni] = apxGrid('expand',xg{i}); di = numel(ni);
+        xs = cell(di,1);                % generic (Strang) circular embedding grid
+        for j=1:di, n2 = floor(ni(j)-1/2)+1; xs{j} = [1:n2,n2-2*ni(j)+2:0]'; end
+        Fz = real(fftn(reshape(z,[ni(:)',1])));  % imaginary part of deriv is zero
+        rep = 2*s*ones(1,di); if di==1, rep = [rep,1]; end           % replication
+        Fzw = repmat(Fz,rep); % replicate i.e. perform transpose of circ operation
+        [junk,xw] = apxGrid('circ',kii,ni,s);    % get Whittle circ embedding grid
+        [junk,dkwi] = kii(apxGrid('expand',xw));             % evaluate derivative
+        dhci = dkwi(Fzw(:));
     end
     dhyp = [dhyp; dhci];
-  end
+end
 
 function dhyp = ldB2_deriv_grid(dhyp, Kg,xg,Mx, alpha,a,b)
-  if nargin == 6, dhyp.cov = dhyp.cov - (alpha'*a(alpha)/2)';
-  else
+if nargin == 6, dhyp.cov = dhyp.cov - (alpha'*a(alpha)/2)';
+else
     if nargin>4, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,alpha,alpha)/2; end
     if nargin>6, dhyp.cov = dhyp.cov-apxGrid('dirder',Kg,xg,Mx,a,b);           end
-  end
+end
 
 function q = linsolve(p,mvm,varargin) % solve q = mvm(p) via conjugate gradients
-  [q,flag,relres,iter] = conjgrad(mvm,p,varargin{:});                 % like pcg
-  if ~flag,error('Not converged after %d iterations, r=%1.2e\n',iter,relres),end
+[q,flag,relres,iter] = conjgrad(mvm,p,varargin{:});                 % like pcg
+if ~flag,error('Not converged after %d iterations, r=%1.2e\n',iter,relres),end
 
 % Solve x=A*b with symmetric A(n,n), b(n,m), x(n,m) using conjugate gradients.
 % The method is along the lines of PCG but suited for matrix inputs b.
@@ -367,18 +385,18 @@ nb = sqrt(sum(b.*b,1)); flag = 0; iter = 1;
 relres = sqrt(r2)./nb; todo = relres>=tol; if ~any(todo), flag = 1; return, end
 on = ones(size(b,1),1); r = r(:,todo); d = r;
 for iter = 2:maxit
-  if isnumeric(A), z = A*d; else z = A(d); end
-  a = r2(todo)./sum(d.*z,1);
-  a = on*a;
-  x(:,todo) = x(:,todo) + a.*d;
-  r = r - a.*z;
-  r2new(todo) = sum(r.*r,1);
-  relres = sqrt(r2new)./nb; cnv = relres(todo)<tol; todo = relres>=tol;
-  d = d(:,~cnv); r = r(:,~cnv);                           % get rid of converged
-  if ~any(todo), flag = 1; return, end
-  b = r2new./r2;                                               % Fletcher-Reeves
-  d = r + (on*b(todo)).*d;
-  r2 = r2new;
+    if isnumeric(A), z = A*d; else z = A(d); end
+    a = r2(todo)./sum(d.*z,1);
+    a = on*a;
+    x(:,todo) = x(:,todo) + a.*d;
+    r = r - a.*z;
+    r2new(todo) = sum(r.*r,1);
+    relres = sqrt(r2new)./nb; cnv = relres(todo)<tol; todo = relres>=tol;
+    d = d(:,~cnv); r = r(:,~cnv);                           % get rid of converged
+    if ~any(todo), flag = 1; return, end
+    b = r2new./r2;                                               % Fletcher-Reeves
+    d = r + (on*b(todo)).*d;
+    r2 = r2new;
 end
 
 % Upper determinant bound on log |K*diag(W)+I| using Fiedler's 1971 inequality.
@@ -387,15 +405,15 @@ end
 % eigenvalues of the matrix K.
 % See also Prob.III.6.14 in Matrix Analysis, Bhatia 1997.
 %
-% Given nxn spd matrices C and D with ordered nx1 eigenvalues c, d 
+% Given nxn spd matrices C and D with ordered nx1 eigenvalues c, d
 % then det(C+D) <= prod(c+flipud(d))=exp(ub).
 function [ub,dE,dW,ie,iw] = logdet_fiedler(E,W)
-  [E,ie] = sort(E,'descend'); [W,iw] = sort(W,'descend');         % sort vectors
-  N = numel(E); n = numel(W); k = n/N*E; % dimensions, approximate spectrum of K
-  if n>N, k = [k;zeros(n-N,1)]; else k = k(1:n); end  % extend/shrink to match W
-  kw1 = k.*W+1; ub = sum(log(kw1))/2;                     % evaluate upper bound
-  dW = zeros(n,1); dW(iw) = k./(2*kw1); m = min(n,N);      % derivative w.r.t. W
-  dE = zeros(N,1); dE(ie(1:m)) = W(1:m)./(N*2/n*kw1(1:m));  % deriative w.r.t. E
+[E,ie] = sort(E,'descend'); [W,iw] = sort(W,'descend');         % sort vectors
+N = numel(E); n = numel(W); k = n/N*E; % dimensions, approximate spectrum of K
+if n>N, k = [k;zeros(n-N,1)]; else k = k(1:n); end  % extend/shrink to match W
+kw1 = k.*W+1; ub = sum(log(kw1))/2;                     % evaluate upper bound
+dW = zeros(n,1); dW(iw) = k./(2*kw1); m = min(n,N);      % derivative w.r.t. W
+dE = zeros(N,1); dE(ie(1:m)) = W(1:m)./(N*2/n*kw1(1:m));  % deriative w.r.t. E
 
 % Approximate l = log(det(B))/2, where B = I + sqrt(W)*K*sqrt(W) and compute
 % the derivatives d l / d hyp w.r.t. covariance hyperparameters and
@@ -414,58 +432,58 @@ function [ub,dE,dW,ie,iw] = logdet_fiedler(E,W)
 %
 % Copyright (c) by Insu Han and Hannes Nickisch 2016-09-27.
 function [ldB2,emax,dhyp,dW] = logdet_sample(W,K,dK, m,d, maxit,emax,seed)
-  sW = sqrt(W); n = numel(W); emin = 1;          % size and min eigenvalue bound
-  B = @(x) x + bsxfun(@times,sW, K(bsxfun(@times,sW,x) ));%B=I+sqrt(W)*K*sqrt(W)
-  if nargin<6, maxit = 50; end
-  if nargin<7 || numel(emax)~=1                % evaluate upper eigenvalue bound
+sW = sqrt(W); n = numel(W); emin = 1;          % size and min eigenvalue bound
+B = @(x) x + bsxfun(@times,sW, K(bsxfun(@times,sW,x) ));%B=I+sqrt(W)*K*sqrt(W)
+if nargin<6, maxit = 50; end
+if nargin<7 || numel(emax)~=1                % evaluate upper eigenvalue bound
     if n==1, emax = B(1); else
-      opt.maxit = maxit;   % number of iterations to estimate the largest eigval
-      opt.issym = 1; opt.isreal = 1; % K is real symmetric and - of course - psd
-      cstr = 'eigs(B,n,1,''lm'',opt)';              % compute largest eigenvalue
-      if exist('evalc'), [txt,emax] = evalc(cstr); else emax = eval(cstr); end
+        opt.maxit = maxit;   % number of iterations to estimate the largest eigval
+        opt.issym = 1; opt.isreal = 1; % K is real symmetric and - of course - psd
+        cstr = 'eigs(B,n,1,''lm'',opt)';              % compute largest eigenvalue
+        if exist('evalc'), [txt,emax] = evalc(cstr); else emax = eval(cstr); end
     end
-  end
-  if nargin<5, d = 15; end
-  if nargin<4, m = 10; end
-  d = round(abs(d)); if d==0, error('We require d>0.'), end
-  a = emin+emax; del = 1-emax/a; ldB2 = n*log(a)/2;% scale eig(B) to [del,1-del]
-  if emax>1e5
+end
+if nargin<5, d = 15; end
+if nargin<4, m = 10; end
+d = round(abs(d)); if d==0, error('We require d>0.'), end
+a = emin+emax; del = 1-emax/a; ldB2 = n*log(a)/2;% scale eig(B) to [del,1-del]
+if emax>1e5
     fprintf('B has large condition number %1.2e\n',emax)
     fprintf('log(det(B))/2 is most likely overestimated\n')
-  end
-  sf = 2/a/(1-2*del); B = @(x) sf*B(x) - 1/(1-2*del)*x;% apply scaling transform
+end
+sf = 2/a/(1-2*del); B = @(x) sf*B(x) - 1/(1-2*del)*x;% apply scaling transform
 
-  xk = cos(pi*((0:d)'+0.5)/(d+1));                              % zeros of Tn(x)
-  fk = log(((1-2*del)/2).*xk+0.5);        % target function, [-1,1]->[del,1-del]
-  Tk = ones(d+1,d+1); Tk(:,2) = xk;                             % init recursion
-  for i=2:d, Tk(:,i+1) = 2*xk.*Tk(:,i) - Tk(:,i-1); end   % evaluate polynomials
-  c = 2/(d+1)*(Tk'*fk); c(1) = c(1)/2;          % compute Chebyshev coefficients
-  if nargin>7 && numel(seed)>0, randn('seed',seed), end               % use seed
-  V = sign(randn(n,m)); dhyp = 0; dW = 0; % bulk draw Rademacher variables, init
-  p1 = [1; zeros(d,1)]; p2 = [0;1;zeros(d-1,1)]; % Chebyshev->usual coefficients
-  p = c(1)*p1 + c(2)*p2;
-  for i=2:d, p3 = [0;2*p2(1:d)]-p1; p = p + c(i+1)*p3; p1 = p2; p2 = p3; end
-  if nargout<3                       % use bulk mvms with B, one for each j=1..d
+xk = cos(pi*((0:d)'+0.5)/(d+1));                              % zeros of Tn(x)
+fk = log(((1-2*del)/2).*xk+0.5);        % target function, [-1,1]->[del,1-del]
+Tk = ones(d+1,d+1); Tk(:,2) = xk;                             % init recursion
+for i=2:d, Tk(:,i+1) = 2*xk.*Tk(:,i) - Tk(:,i-1); end   % evaluate polynomials
+c = 2/(d+1)*(Tk'*fk); c(1) = c(1)/2;          % compute Chebyshev coefficients
+if nargin>7 && numel(seed)>0, randn('seed',seed), end               % use seed
+V = sign(randn(n,m)); dhyp = 0; dW = 0; % bulk draw Rademacher variables, init
+p1 = [1; zeros(d,1)]; p2 = [0;1;zeros(d-1,1)]; % Chebyshev->usual coefficients
+p = c(1)*p1 + c(2)*p2;
+for i=2:d, p3 = [0;2*p2(1:d)]-p1; p = p + c(i+1)*p3; p1 = p2; p2 = p3; end
+if nargout<3                       % use bulk mvms with B, one for each j=1..d
     U = p(1)*V; BjV = V; for j=1:d, BjV = B(BjV); U = U + p(j+1)*BjV; end
     ldB2 = ldB2 + sum(sum(V.*U))/(2*m);
-  else                               % deal with one Rademacher vector at a time
+else                               % deal with one Rademacher vector at a time
     Bv = zeros(n,d+1);                            % all powers Bv(:,j) = (B^j)*v
     for i=1:m
-      v = V(:,i); Bv(:,1) = v;
-      for j=1:d, Bv(:,j+1) = B(Bv(:,j)); end
-      ldB2 = ldB2 + (v'*Bv*p)/(2*m);
-      sWBv = bsxfun(@times,sW,Bv);
-      for j=1:d                   % p(1)*I + p(2)*B + p(3)*B^2 + .. + p(d+1)*B^d
-        for k=1:ceil(j/2)
-          akj = sf*p(j+1)/m; if k==ceil(j/2) && mod(j,2)==1, akj = akj/2; end
-          dhyp = dhyp + akj * dK(sWBv(:,j-k+1),sWBv(:,k));
+        v = V(:,i); Bv(:,1) = v;
+        for j=1:d, Bv(:,j+1) = B(Bv(:,j)); end
+        ldB2 = ldB2 + (v'*Bv*p)/(2*m);
+        sWBv = bsxfun(@times,sW,Bv);
+        for j=1:d                   % p(1)*I + p(2)*B + p(3)*B^2 + .. + p(d+1)*B^d
+            for k=1:ceil(j/2)
+                akj = sf*p(j+1)/m; if k==ceil(j/2) && mod(j,2)==1, akj = akj/2; end
+                dhyp = dhyp + akj * dK(sWBv(:,j-k+1),sWBv(:,k));
+            end
         end
-      end
-      if nargout>3, u = bsxfun(@times,1./sW,Bv); w = K(sWBv);       % precompute
-        for j=1:d
-          dWj = sum( u(:,j:-1:1).*w(:,1:j) + w(:,j:-1:1).*u(:,1:j), 2 );
-          dW = dW + sf*p(j+1)/(4*m) * dWj;
+        if nargout>3, u = bsxfun(@times,1./sW,Bv); w = K(sWBv);       % precompute
+            for j=1:d
+                dWj = sum( u(:,j:-1:1).*w(:,1:j) + w(:,j:-1:1).*u(:,1:j), 2 );
+                dW = dW + sf*p(j+1)/(4*m) * dWj;
+            end
         end
-      end
     end
-  end
+end
